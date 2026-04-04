@@ -1,0 +1,74 @@
+package ru.wilyfox.mixin;
+
+import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.network.chat.Component;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Constant;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import ru.wilyfox.client.chat.AutoBossAnnouncer;
+import ru.wilyfox.client.chat.AutoThanks;
+import ru.wilyfox.client.chat.BoosterChatDebug;
+import ru.wilyfox.client.chat.BossShareService;
+import ru.wilyfox.client.chat.ChatDispatchQueue;
+import ru.wilyfox.client.chat.ChatMessageDecorator;
+import ru.wilyfox.client.chat.ChatTabManager;
+import ru.wilyfox.client.chat.FrogChatProtocol;
+import ru.wilyfox.client.chat.PrivateMessagePopUpNotifier;
+import ru.wilyfox.client.chat.VisibilityStatusTracker;
+import ru.wilyfox.client.clan.PlayerClanStorage;
+
+@Mixin(ChatComponent.class)
+public class ChatHudMixin {
+    @ModifyVariable(method = "addMessage(Lnet/minecraft/network/chat/Component;)V", at = @At("HEAD"), argsOnly = true)
+    private Component froghelper$decorateChat(Component component) {
+        return ChatMessageDecorator.decorate(component);
+    }
+
+    @Inject(method = "addMessage(Lnet/minecraft/network/chat/Component;)V", at = @At("HEAD"), cancellable = true)
+    private void froghelper$captureSimple(Component component, CallbackInfo ci) {
+        ChatDispatchQueue.handleIncomingMessage(component);
+        BoosterChatDebug.onIncomingMessage(component);
+        AutoThanks.onIncomingMessage(component);
+        AutoBossAnnouncer.onIncomingMessage(component);
+        PrivateMessagePopUpNotifier.onIncomingMessage(component);
+        VisibilityStatusTracker.onIncomingMessage(component);
+        PlayerClanStorage.captureFromChat(component);
+
+        if (BossShareService.handleIncomingShare(component)) {
+            ci.cancel();
+            return;
+        }
+
+        if (FrogChatProtocol.handleIncomingProtocol(component)) {
+            ci.cancel();
+            return;
+        }
+
+        ChatTabManager manager = ChatTabManager.getInstance();
+
+        manager.captureIncoming(component);
+
+        if (manager.isRebuilding()) {
+            return;
+        }
+
+        if (!manager.shouldDisplayInActiveTab(component)) {
+            ci.cancel();
+        }
+    }
+
+    @ModifyConstant(
+            method = {
+                    "addMessageToDisplayQueue(Lnet/minecraft/client/GuiMessage;)V",
+                    "addMessageToQueue(Lnet/minecraft/client/GuiMessage;)V"
+            },
+            constant = @Constant(intValue = 100)
+    )
+    private int froghelper$extendChatHistory(int original) {
+        return Math.max(original, original + Math.max(0, ru.wilyfox.client.hud.config.ConfigManager.get().render.extraChatHistoryLines));
+    }
+}

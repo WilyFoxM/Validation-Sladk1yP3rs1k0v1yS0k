@@ -1,0 +1,31 @@
+{
+	"required": true,
+	"package": "ru.wilyfox.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"ClientPacketListenerMixin",
+		"ChatComponentAccessorMixin",
+		"ChatHudMixin",
+		"ChatScreenMixin",
+		"KeyMappingAccessorMixin",
+		"AbstractContainerScreenMixin",
+		"BlockBreakMixin",
+		"BossHealthOverlay",
+		"GameRendererMixin",
+		"GuiScoreboardMixin",
+		"ItemInHandRendererMixin",
+		"LightningBoltRendererMixin",
+		"MultiPlayerGameModeMixin",
+		"ParticleEngineMixin",
+		"PlayerFishingAccessorMixin",
+		"PlayerRendererMixin",
+		"PlayerTabOverlayMixin",
+		"ScreenEffectRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

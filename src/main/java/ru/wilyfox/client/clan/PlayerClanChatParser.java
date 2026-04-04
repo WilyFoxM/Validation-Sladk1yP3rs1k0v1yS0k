@@ -1,0 +1,111 @@
+package ru.wilyfox.client.clan;
+
+import net.minecraft.network.chat.Component;
+import ru.wilyfox.client.chat.ChatTimestampFormatter;
+import ru.wilyfox.utils.Formatting;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+final class PlayerClanChatParser {
+    private static final Pattern TRAILING_LEVEL_PATTERN = Pattern.compile("\\[(\\d{1,3})]$");
+    private static final Pattern TRAILING_BRACKET_PATTERN = Pattern.compile("\\[([^\\]]+)]$");
+    private static final Pattern PLAYER_NAME_PATTERN = Pattern.compile("^[A-Za-z0-9_]{3,16}$");
+    private static final int MIN_LEVEL = 1;
+    private static final int MAX_LEVEL = 520;
+
+    private PlayerClanChatParser() {
+    }
+
+    static ParsedClanChatEntry parse(Component component) {
+        if (component == null) {
+            return null;
+        }
+
+        return parse(component.getString());
+    }
+
+    static ParsedClanChatEntry parse(String rawText) {
+        if (rawText == null || rawText.isBlank()) {
+            return null;
+        }
+
+        String text = Formatting.stripMinecraftFormatting(rawText).replace('\u00A0', ' ').trim();
+        text = stripAllTimestampPrefixes(text);
+        if (text.isBlank()) {
+            return null;
+        }
+
+        int colonIndex = text.indexOf(':');
+        if (colonIndex < 0) {
+            return null;
+        }
+
+        String header = text.substring(0, colonIndex).trim();
+        Matcher levelMatcher = TRAILING_LEVEL_PATTERN.matcher(header);
+        if (!levelMatcher.find()) {
+            return null;
+        }
+
+        int level = Integer.parseInt(levelMatcher.group(1));
+        if (level < MIN_LEVEL || level > MAX_LEVEL) {
+            return null;
+        }
+
+        String beforeLevel = header.substring(0, levelMatcher.start()).trim();
+        if (beforeLevel.isBlank()) {
+            return null;
+        }
+
+        String clanName = null;
+        Matcher clanMatcher = TRAILING_BRACKET_PATTERN.matcher(beforeLevel);
+        if (clanMatcher.find()) {
+            clanName = cleanClan(clanMatcher.group(1));
+            beforeLevel = beforeLevel.substring(0, clanMatcher.start()).trim();
+        }
+
+        String playerName = extractPlayerName(beforeLevel);
+        if (playerName == null) {
+            return null;
+        }
+
+        return new ParsedClanChatEntry(playerName, clanName);
+    }
+
+    private static String stripAllTimestampPrefixes(String text) {
+        String current = text;
+
+        while (true) {
+            String stripped = ChatTimestampFormatter.stripTimestampPrefix(current);
+            if (stripped.equals(current)) {
+                return current.trim();
+            }
+            current = stripped.trim();
+        }
+    }
+
+    private static String cleanClan(String clanName) {
+        if (clanName == null) {
+            return null;
+        }
+
+        String cleaned = clanName.trim().replace('\u00A0', ' ');
+        return cleaned.isBlank() ? null : cleaned;
+    }
+
+    private static String extractPlayerName(String header) {
+        if (header == null || header.isBlank()) {
+            return null;
+        }
+
+        String[] tokens = header.split("\\s+");
+        for (int index = tokens.length - 1; index >= 0; index--) {
+            String token = tokens[index].trim();
+            if (PLAYER_NAME_PATTERN.matcher(token).matches()) {
+                return token;
+            }
+        }
+
+        return null;
+    }
+}

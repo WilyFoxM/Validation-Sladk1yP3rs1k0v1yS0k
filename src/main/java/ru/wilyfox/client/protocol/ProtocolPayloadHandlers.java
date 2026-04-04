@@ -1,0 +1,772 @@
+package ru.wilyfox.client.protocol;
+
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import ru.wilyfox.client.boss.BossDamageInfo;
+import ru.wilyfox.client.miner.ActiveMinerInfo;
+import ru.wilyfox.client.pet.ActivePetInfo;
+import ru.wilyfox.client.rune.RuneSetCooldownStore;
+import ru.wilyfox.client.wand.WandCooldownTracker;
+
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import static ru.wilyfox.FrogHelper.LOGGER;
+
+final class ProtocolPayloadHandlers {
+    private static final int BOSSTIMER_PREVIEW_LIMIT = 8;
+    private static final int BOSSTYPE_PREVIEW_LIMIT = 6;
+    private static final int ACTIVE_RUNES_PREVIEW_LIMIT = 5;
+    private static final int PETTYPE_PREVIEW_LIMIT = 6;
+    private static final int ACTIVE_PETS_PREVIEW_LIMIT = 6;
+    private static final int ABILITY_PREVIEW_LIMIT = 6;
+    private static final int STAFF_PREVIEW_LIMIT = 6;
+    private static final int BOOSTER_PREVIEW_LIMIT = 6;
+
+    private ProtocolPayloadHandlers() {
+    }
+
+    static boolean handleBossTimers(ProtocolState state, byte[] data) {
+        try {
+            DwBossTimersPacket packet = DwBossTimersDecoder.decode(data, state.bossTypes.keySet());
+            applyBossTimers(state, packet);
+
+            if (packet.timers().isEmpty()) {
+                LOGGER.info("DW protocol: bosstimers parsed successfully, entries=0");
+                return true;
+            }
+
+            long min = packet.timers().values().stream().min(Long::compareTo).orElse(0L);
+            long max = packet.timers().values().stream().max(Long::compareTo).orElse(0L);
+            String preview = packet.timers().entrySet().stream()
+                    .sorted(Map.Entry.comparingByValue())
+                    .limit(BOSSTIMER_PREVIEW_LIMIT)
+                    .map(entry -> entry.getKey() + "=" + ProtocolPayloadSupport.formatRemainingMillis(entry.getValue()))
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: bosstimers parsed successfully, entries={}, min={}, max={}, first={}",
+                    packet.timers().size(),
+                    ProtocolPayloadSupport.formatRemainingMillis(min),
+                    ProtocolPayloadSupport.formatRemainingMillis(max),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse bosstimers payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleBossTypes(ProtocolState state, byte[] data) {
+        try {
+            DwBossTypesPacket packet = DwBossTypesDecoder.decode(data);
+            state.bossTypes = new LinkedHashMap<>(packet.types());
+
+            if (packet.types().isEmpty()) {
+                LOGGER.info("DW protocol: bosstypes parsed successfully, entries=0");
+                return true;
+            }
+
+            String preview = packet.types().values().stream()
+                    .sorted(Comparator.comparingInt(DwBossType::level))
+                    .limit(BOSSTYPE_PREVIEW_LIMIT)
+                    .map(type -> type.id() + "=" + type.name() + " lvl " + type.level())
+                    .collect(Collectors.joining(", "));
+
+            String iconPreview = packet.types().values().stream()
+                    .sorted(Comparator.comparingInt(DwBossType::level))
+                    .limit(BOSSTYPE_PREVIEW_LIMIT)
+                    .map(type -> type.id() + "={" + type.material() + ", cmd=" + type.customModelData() + "}")
+                    .collect(Collectors.joining(", "));
+
+            long raidCount = packet.types().values().stream().filter(DwBossType::raid).count();
+            LOGGER.info(
+                    "DW protocol: bosstypes parsed successfully, entries={}, raids={}, first={}",
+                    packet.types().size(),
+                    raidCount,
+                    preview
+            );
+            LOGGER.info("DW protocol: bosstypes icon preview={}", iconPreview);
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse bosstypes payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleActiveRunes(ProtocolState state, byte[] data) {
+        try {
+            DwActiveRunesPacket packet = DwActiveRunesDecoder.decode(data);
+
+            if (state.activeRunesStore != null) {
+                state.activeRunesStore.replace(packet.runes());
+            }
+
+            String preview = packet.runes().stream()
+                    .limit(ACTIVE_RUNES_PREVIEW_LIMIT)
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: activerunes parsed successfully, entries={}, first={}",
+                    packet.runes().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse activerunes payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleServerInfo(ProtocolState state, byte[] data) {
+        try {
+            CurrentServerInfo serverInfo = DwServerInfoDecoder.decode(data);
+            state.currentServerInfo = serverInfo;
+            LOGGER.info(
+                    "DW protocol: serverinfo parsed successfully, family={}, server={}, mirror={}, display={}",
+                    serverInfo.family(),
+                    serverInfo.serverNumber(),
+                    serverInfo.mirror(),
+                    serverInfo.displayName()
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse serverinfo payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handlePetTypes(ProtocolState state, byte[] data) {
+        try {
+            DwPetTypesPacket packet = DwPetTypesDecoder.decode(data);
+            state.petTypes = new LinkedHashMap<>(packet.types());
+
+            if (packet.types().isEmpty()) {
+                LOGGER.info("DW protocol: pettypes parsed successfully, entries=0");
+                return true;
+            }
+
+            String preview = packet.types().values().stream()
+                    .limit(PETTYPE_PREVIEW_LIMIT)
+                    .map(type -> type.id() + "=" + type.name())
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: pettypes parsed successfully, entries={}, first={}",
+                    packet.types().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse pettypes payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handlePotionTypes(ProtocolState state, byte[] data) {
+        try {
+            DwPotionTypesPacket packet = DwPotionTypesDecoder.decode(data);
+
+            if (state.potionStore != null) {
+                state.potionStore.replaceTypes(packet.entries());
+            }
+
+            String preview = packet.entries().stream()
+                    .limit(PETTYPE_PREVIEW_LIMIT)
+                    .map(entry -> entry.id() + "={" + entry.modelId() + ", " + entry.name() + "}")
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: potiontypes parsed successfully, entries={}, first={}",
+                    packet.entries().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse potiontypes payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleSellers(ProtocolState state, byte[] data) {
+        try {
+            DwSellersPacket packet = DwSellersDecoder.decode(data);
+
+            if (state.sellerCooldownStore != null) {
+                state.sellerCooldownStore.replace(packet.entries());
+            }
+
+            String preview = packet.entries().stream()
+                    .limit(6)
+                    .map(entry -> entry.id() + "=" + entry.name() + " (" + (entry.remainingMillis() < 0L ? "ready" : ProtocolPayloadSupport.formatRemainingMillis(entry.remainingMillis())) + ")")
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: sellers parsed successfully, entries={}, first={}",
+                    packet.entries().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse sellers payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleCombo(ProtocolState state, byte[] data) {
+        try {
+            DwComboPacket packet = DwComboDecoder.decode(data);
+
+            if (state.comboProgressStore != null) {
+                state.comboProgressStore.updateCombo(packet.booster(), packet.nextBooster(), packet.blocks(), packet.requiredBlocks());
+            }
+
+            LOGGER.info(
+                    "DW protocol: combo parsed successfully, booster=x{}, next=x{}, blocks={}/{}, progress={}%",
+                    ProtocolPayloadSupport.formatCompactMultiplier(packet.booster()),
+                    ProtocolPayloadSupport.formatCompactMultiplier(packet.nextBooster()),
+                    packet.blocks(),
+                    packet.requiredBlocks(),
+                    packet.requiredBlocks() <= 0 ? 0 : Math.round(packet.blocks() * 100.0D / packet.requiredBlocks())
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse combo payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleComboBlocks(ProtocolState state, byte[] data) {
+        try {
+            DwComboBlocksPacket packet = DwComboBlocksDecoder.decode(data);
+
+            if (state.comboProgressStore != null) {
+                state.comboProgressStore.updateBlocks(packet.blocks());
+            }
+
+            LOGGER.info("DW protocol: comboblocks parsed successfully, blocks={}", packet.blocks());
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse comboblocks payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handlePotionTimers(ProtocolState state, byte[] data) {
+        try {
+            DwPotionTimersPacket packet = DwPotionTimersDecoder.decode(data);
+
+            if (state.potionStore != null) {
+                state.potionStore.applyUpdate(packet.entries());
+            }
+
+            String preview = packet.entries().stream()
+                    .limit(8)
+                    .map(entry -> entry.id() + "=" + ProtocolPayloadSupport.formatRemainingMillis(entry.remainedMillis()) + " (" + entry.quality() + "%)")
+                    .collect(Collectors.joining(", "));
+
+            long activeCount = packet.entries().stream()
+                    .filter(entry -> entry.remainedMillis() > 0L && entry.quality() > 0)
+                    .count();
+
+            LOGGER.info(
+                    "DW protocol: potiontimers parsed successfully, entries={}, active={}, first={}",
+                    packet.entries().size(),
+                    activeCount,
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse potiontimers payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleStatisticInfo(ProtocolState state, byte[] data) {
+        try {
+            DwStatisticInfoPacket packet = DwStatisticInfoDecoder.decode(data);
+            List<ActivePetInfo> activePets = ProtocolPayloadSupport.extractActivePets(state, packet);
+            List<ActiveMinerInfo> activeMiners = ProtocolPayloadSupport.extractActiveMiners(state, packet);
+            String keysPreview = packet.values().keySet().stream()
+                    .sorted()
+                    .collect(Collectors.joining(", "));
+            String gameLocation = ProtocolPayloadSupport.firstNonBlank(
+                    packet.values().get("gameLocation"),
+                    packet.values().get("location"),
+                    packet.values().get("loc")
+            );
+            if (gameLocation != null) {
+                state.currentGameLocation = ProtocolPayloadSupport.normalizeStatisticString(gameLocation);
+            }
+
+            if (state.activePetsStore != null) {
+                if (packet.values().containsKey("pets")) {
+                    state.activePetsStore.replace(activePets);
+                } else {
+                    state.activePetsStore.merge(activePets);
+                }
+            }
+
+            if (state.activeMinersStore != null) {
+                if (packet.values().containsKey("miners")) {
+                    state.activeMinersStore.replace(activeMiners);
+                } else {
+                    state.activeMinersStore.merge(activeMiners);
+                }
+            }
+
+            if (state.levelProgressStore != null) {
+                state.levelProgressStore.updateCurrent(
+                        ProtocolPayloadSupport.getInt(packet.values(), "level"),
+                        ProtocolPayloadSupport.getInt(packet.values(), "blocks"),
+                        ProtocolPayloadSupport.getDouble(packet.values(), "balance")
+                );
+            }
+
+            String preview = activePets.stream()
+                    .limit(ACTIVE_PETS_PREVIEW_LIMIT)
+                    .map(pet -> pet.name() + " [" + pet.level() + "] " + ProtocolPayloadSupport.formatEnergy(pet.energy()) + "\u26a1")
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: statisticinfo parsed successfully, keys={}, activePets={}, activeMiners={}, first={}",
+                    packet.values().size(),
+                    activePets.size(),
+                    activeMiners.size(),
+                    preview
+            );
+            LOGGER.info("DW protocol: statisticinfo keys=[{}]", keysPreview);
+            if (state.currentGameLocation != null) {
+                LOGGER.info("DW protocol: statisticinfo location candidate={}", state.currentGameLocation);
+            }
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse statisticinfo payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleLevelInfo(ProtocolState state, byte[] data) {
+        try {
+            DwLevelInfoPacket packet = DwLevelInfoDecoder.decode(data);
+
+            if (state.levelProgressStore != null) {
+                state.levelProgressStore.updateCurrent(packet.level(), packet.blocks(), packet.money());
+                state.levelProgressStore.updateRequirements(packet.requiredBlocks(), packet.requiredMoney(), packet.maxLevel());
+            }
+
+            LOGGER.info(
+                    "DW protocol: levelinfo parsed successfully, level={}, blocks={}, money={}, requiredBlocks={}, requiredMoney={}, max={}",
+                    packet.level(),
+                    packet.blocks(),
+                    ProtocolPayloadSupport.formatCompactMoney(packet.money()),
+                    packet.requiredBlocks(),
+                    ProtocolPayloadSupport.formatCompactMoney(packet.requiredMoney()),
+                    packet.maxLevel()
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse levelinfo payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleFishingSpots(ProtocolState state, byte[] data) {
+        try {
+            DwFishingSpotsPacket packet = DwFishingSpotsDecoder.decode(data);
+            LinkedHashSet<String> locationIds = packet.locations().keySet().stream()
+                    .map(DiamondWorldProtocolClient::normalizeLocationId)
+                    .filter(id -> id != null && !id.isBlank())
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            Map<String, String> locationNames = packet.locations().entrySet().stream()
+                    .map(entry -> Map.entry(
+                            DiamondWorldProtocolClient.normalizeLocationId(entry.getKey()),
+                            ProtocolPayloadSupport.normalizeStatisticString(entry.getValue())
+                    ))
+                    .filter(entry -> entry.getKey() != null && !entry.getKey().isBlank())
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue() == null || entry.getValue().isBlank() ? entry.getKey() : entry.getValue(),
+                            (left, right) -> right,
+                            LinkedHashMap::new
+                    ));
+
+            state.fishingLocationIds.addAll(locationIds);
+            state.fishingLocationNames.putAll(locationNames);
+
+            String preview = packet.locations().entrySet().stream()
+                    .limit(8)
+                    .map(entry -> entry.getKey() + "=" + entry.getValue())
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: fishingpots parsed successfully, entries={}, first={}",
+                    packet.locations().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse fishingpots payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleSpotNibbles(ProtocolState state, byte[] data) {
+        try {
+            DwSpotNibblesPacket packet = DwSpotNibblesDecoder.decode(data);
+            Map<String, Double> nibbles = packet.nibbles().entrySet().stream()
+                    .map(entry -> Map.entry(
+                            DiamondWorldProtocolClient.normalizeLocationId(entry.getKey()),
+                            entry.getValue()
+                    ))
+                    .filter(entry -> entry.getKey() != null && !entry.getKey().isBlank())
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue() == null ? 0.0D : entry.getValue(),
+                            (left, right) -> right,
+                            LinkedHashMap::new
+                    ));
+            state.fishingNibbles.putAll(nibbles);
+
+            String preview = state.fishingNibbles.entrySet().stream()
+                    .limit(8)
+                    .map(entry -> entry.getKey() + "=" + String.format(java.util.Locale.ROOT, "%.3f", entry.getValue()))
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: spotnibbles parsed successfully, entries={}, first={}",
+                    packet.nibbles().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse spotnibbles payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleStaffTypes(ProtocolState state, byte[] data) {
+        try {
+            DwStaffTypesPacket packet = DwStaffTypesDecoder.decode(data);
+            state.staffTypes = new LinkedHashMap<>(packet.types());
+
+            WandCooldownTracker.getInstance().replaceTypes(
+                    packet.types().values().stream().collect(Collectors.toMap(DwStaffType::id, DwStaffType::name)),
+                    packet.types().values().stream().collect(Collectors.toMap(DwStaffType::id, DwStaffType::modelId))
+            );
+
+            String preview = packet.types().values().stream()
+                    .limit(STAFF_PREVIEW_LIMIT)
+                    .map(type -> type.id() + "=" + type.name() + " (cmd=" + type.modelId() + ")")
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: stafftypes parsed successfully, entries={}, first={}",
+                    packet.types().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse stafftypes payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleStaffTimers(ProtocolState state, byte[] data) {
+        try {
+            DwStaffTimersPacket packet = DwStaffTimersDecoder.decode(data);
+            WandCooldownTracker.getInstance().replaceProtocol(packet.timers());
+
+            String preview = packet.timers().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .limit(STAFF_PREVIEW_LIMIT)
+                    .map(entry -> entry.getKey() + "=" + ProtocolPayloadSupport.formatRemainingMillis(entry.getValue()))
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: stafftimers parsed successfully, entries={}, first={}",
+                    packet.timers().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse stafftimers payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleAbilityTypes(ProtocolState state, byte[] data) {
+        try {
+            DwAbilityTypesPacket packet = DwAbilityTypesDecoder.decode(data);
+            state.abilityTypes = new LinkedHashMap<>(packet.types());
+
+            if (state.abilityCooldownStore != null) {
+                state.abilityCooldownStore.replaceTypes(
+                        packet.types().values().stream().collect(Collectors.toMap(DwAbilityType::id, DwAbilityType::name))
+                );
+            }
+
+            String preview = packet.types().values().stream()
+                    .limit(ABILITY_PREVIEW_LIMIT)
+                    .map(type -> type.id() + "=" + type.name())
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: abilitytypes parsed successfully, entries={}, first={}",
+                    packet.types().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse abilitytypes payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleAbilityTimers(ProtocolState state, byte[] data) {
+        try {
+            DwAbilityTimersPacket packet = DwAbilityTimersDecoder.decode(data);
+            long now = System.currentTimeMillis();
+            if (ProtocolPayloadSupport.shouldTriggerRuneSetCooldown(state, packet.timers(), now)) {
+                RuneSetCooldownStore.update(10_000L);
+            }
+
+            state.lastAbilityTimers = new LinkedHashMap<>(packet.timers());
+            state.lastAbilityTimersAt = now;
+
+            if (state.abilityCooldownStore != null) {
+                state.abilityCooldownStore.replaceCooldowns(packet.timers());
+            }
+
+            String preview = packet.timers().entrySet().stream()
+                    .sorted(Map.Entry.comparingByValue())
+                    .limit(ABILITY_PREVIEW_LIMIT)
+                    .map(entry -> entry.getKey() + "=" + ProtocolPayloadSupport.formatRemainingMillis(entry.getValue()))
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: abilitytimers parsed successfully, entries={}, first={}",
+                    packet.timers().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse abilitytimers payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleBossDamage(ProtocolState state, byte[] data) {
+        try {
+            DwBossDamagePacket packet = DwBossDamageDecoder.decode(data);
+            DwBossType type = state.bossTypes.get(packet.bossId());
+            String bossName = type != null ? type.name() : ProtocolPayloadSupport.prettifyId(packet.bossId());
+            int bossLevel = type != null ? type.level() : 0;
+
+            if (state.bossDamageStore != null) {
+                state.bossDamageStore.update(new BossDamageInfo(
+                        packet.bossId(),
+                        bossName,
+                        bossLevel,
+                        packet.damage(),
+                        System.currentTimeMillis()
+                ));
+            }
+
+            LOGGER.info(
+                    "DW protocol: bossdamage parsed successfully, boss={} [{}], damage={}",
+                    bossName,
+                    bossLevel,
+                    packet.damage()
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse bossdamage payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleGourmetCooldown(ProtocolState state, byte[] data) {
+        try {
+            DwCooldownValuePacket packet = DwCooldownValueDecoder.decode(data);
+            long remaining = Math.max(0L, packet.remainingMillis());
+
+            if (state.abilityCooldownStore != null) {
+                state.abilityCooldownStore.replaceExternalCooldown("gourmetcd", "Гурман", remaining);
+            }
+
+            LOGGER.info(
+                    "DW protocol: gourmetcd parsed successfully, remaining={}, raw={}",
+                    remaining > 0L ? ProtocolPayloadSupport.formatRemainingMillis(remaining) : "ready",
+                    packet.remainingMillis()
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse gourmetcd payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleHarpoonCooldown(byte[] data) {
+        try {
+            DwCooldownValuePacket packet = DwCooldownValueDecoder.decode(data);
+            long remaining = Math.max(0L, packet.remainingMillis());
+
+            WandCooldownTracker.getInstance().replaceSpecialCooldown(
+                    "harpooncd",
+                    new ItemStack(Items.TRIDENT),
+                    "Гарпун",
+                    remaining
+            );
+
+            LOGGER.info(
+                    "DW protocol: harpooncd parsed successfully, remaining={}, raw={}",
+                    remaining > 0L ? ProtocolPayloadSupport.formatRemainingMillis(remaining) : "ready",
+                    packet.remainingMillis()
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse harpooncd payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleNamedCooldown(String typeId, String displayName, byte[] data) {
+        try {
+            DwCooldownValuePacket packet = DwCooldownValueDecoder.decode(data);
+            long remaining = Math.max(0L, packet.remainingMillis());
+            LOGGER.info(
+                    "DW protocol: {} parsed successfully, displayName={}, remaining={}, raw={}",
+                    typeId,
+                    displayName,
+                    remaining > 0L ? ProtocolPayloadSupport.formatRemainingMillis(remaining) : "ready",
+                    packet.remainingMillis()
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse {} payload", typeId, exception);
+            return false;
+        }
+    }
+
+    static boolean handleToken(byte[] data) {
+        try {
+            DwTokenPacket packet = DwTokenDecoder.decode(data);
+            LOGGER.info(
+                    "DW protocol: token parsed successfully, present={}, length={}, value={}",
+                    packet.value() != null,
+                    packet.value() != null ? packet.value().length() : 0,
+                    packet.value()
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse token payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleGameEvent(ProtocolState state, byte[] data) {
+        try {
+            DwGameEventPacket packet = DwGameEventDecoder.decode(data);
+            state.currentGameEvent = packet.event();
+            LOGGER.info(
+                    "DW protocol: gameevent parsed successfully, event={}, display={}",
+                    packet.event().name(),
+                    packet.event().displayName()
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse gameevent payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleClanInfo(ProtocolState state, byte[] data) {
+        try {
+            DwClanInfoPacket packet = DwClanInfoDecoder.decode(data);
+            state.clanInfo = new LinkedHashMap<>(packet.values());
+
+            String preview = packet.values().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .limit(12)
+                    .map(entry -> entry.getKey() + "=" + entry.getValue())
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: claninfo parsed successfully, entries={}, first={}",
+                    packet.values().size(),
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse claninfo payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleBoosters(ProtocolState state, byte[] data) {
+        try {
+            DwBoostersPacket packet = DwBoostersDecoder.decode(data);
+
+            if (state.boosterStore != null) {
+                state.boosterStore.replace(ru.wilyfox.client.booster.BoosterStore.Kind.MONEY, packet.boosters().get(ru.wilyfox.client.booster.BoosterStore.Kind.MONEY));
+                state.boosterStore.replace(ru.wilyfox.client.booster.BoosterStore.Kind.SHARDS, packet.boosters().get(ru.wilyfox.client.booster.BoosterStore.Kind.SHARDS));
+            }
+
+            long totalEntries = packet.boosters().values().stream()
+                    .mapToLong(List::size)
+                    .sum();
+            String preview = packet.boosters().entrySet().stream()
+                    .flatMap(entry -> entry.getValue().stream()
+                            .map(value -> entry.getKey() + "=x" + ProtocolPayloadSupport.formatCompactMultiplier(value.multiplier()) + " " + ProtocolPayloadSupport.formatRemainingMillis(value.remainingMillis())))
+                    .limit(BOOSTER_PREVIEW_LIMIT)
+                    .collect(Collectors.joining(", "));
+
+            LOGGER.info(
+                    "DW protocol: boosters parsed successfully, groups={}, entries={}, first={}",
+                    packet.boosters().size(),
+                    totalEntries,
+                    preview
+            );
+            return true;
+        } catch (Exception exception) {
+            LOGGER.warn("DW protocol: failed to parse boosters payload", exception);
+            return false;
+        }
+    }
+
+    private static void applyBossTimers(ProtocolState state, DwBossTimersPacket packet) {
+        if (state.bossRepository == null) {
+            return;
+        }
+
+        long now = Instant.now().toEpochMilli();
+        Map<String, ru.wilyfox.boss.BossInfo> snapshot = new HashMap<>();
+
+        for (Map.Entry<String, Long> entry : packet.timers().entrySet()) {
+            String bossId = entry.getKey();
+            DwBossType type = state.bossTypes.get(bossId);
+
+            String bossName = bossId;
+            int level = 0;
+            if (type != null) {
+                bossName = type.name();
+                level = type.level();
+            }
+
+            long respawnAt = now + entry.getValue();
+            respawnAt = ((respawnAt + 999) / 1000) * 1000;
+            ru.wilyfox.boss.BossInfo bossInfo = new ru.wilyfox.boss.BossInfo(bossName, respawnAt, level);
+            snapshot.put(bossId, bossInfo);
+        }
+
+        state.bossRepository.replaceProtocol(snapshot);
+    }
+}
