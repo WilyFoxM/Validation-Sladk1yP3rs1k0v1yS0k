@@ -5,16 +5,15 @@ import ru.wilyfox.client.hud.config.ConfigManager;
 import ru.wilyfox.client.hud.widget.WidgetTheme;
 
 final class PingMarkerPresentation {
-    static final int PRIMARY_TEXT_COLOR = WidgetTheme.TEXT_SOFT;
-    static final int SECONDARY_TEXT_COLOR = WidgetTheme.TEXT_SECONDARY;
-    static final int OWN_BLOCK_ACCENT_COLOR = WidgetTheme.ACCENT_LINE;
-    static final int OTHER_BLOCK_ACCENT_COLOR = WidgetTheme.TEXT_PRIMARY;
-    static final int OWN_ENTITY_ACCENT_COLOR = WidgetTheme.TEXT_ACCENT;
-    static final int OTHER_ENTITY_ACCENT_COLOR = WidgetTheme.TITLE;
-    static final int BLOCK_BACKGROUND_COLOR = WidgetTheme.PANEL_BG;
-    static final int ENTITY_BACKGROUND_COLOR = WidgetTheme.PANEL_BG_SOFT;
-
     private PingMarkerPresentation() {
+    }
+
+    static int getPrimaryTextColor() {
+        return WidgetTheme.TEXT_SOFT;
+    }
+
+    static int getSecondaryTextColor() {
+        return WidgetTheme.TEXT_SECONDARY;
     }
 
     static String buildPrimaryLine(PingPayload payload) {
@@ -77,15 +76,15 @@ final class PingMarkerPresentation {
         if (mc.player != null
                 && payload.author() != null
                 && payload.author().equalsIgnoreCase(mc.player.getGameProfile().getName())) {
-            return entityMarker ? OWN_ENTITY_ACCENT_COLOR : OWN_BLOCK_ACCENT_COLOR;
+            return entityMarker ? WidgetTheme.TEXT_ACCENT : WidgetTheme.ACCENT_LINE;
         }
 
-        return entityMarker ? OTHER_ENTITY_ACCENT_COLOR : OTHER_BLOCK_ACCENT_COLOR;
+        return entityMarker ? WidgetTheme.TITLE : WidgetTheme.TEXT_PRIMARY;
     }
 
     static int getBackgroundColor(PingPayload payload) {
         return PingPayload.TYPE_ENTITY.equalsIgnoreCase(payload.type())
-                ? ENTITY_BACKGROUND_COLOR
-                : BLOCK_BACKGROUND_COLOR;
+                ? WidgetTheme.PANEL_BG_SOFT
+                : WidgetTheme.PANEL_BG;
     }
 }

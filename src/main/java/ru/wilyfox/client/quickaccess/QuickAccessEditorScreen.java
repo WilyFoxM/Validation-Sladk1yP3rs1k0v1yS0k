@@ -67,7 +67,7 @@ public class QuickAccessEditorScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0x50000000);
+        graphics.fill(0, 0, this.width, this.height, WidgetTheme.withAlpha(WidgetTheme.PANEL_BG, 0x50));
 
         panelX = (this.width - PANEL_WIDTH) / 2;
         panelY = (this.height - PANEL_HEIGHT) / 2;

@@ -58,7 +58,7 @@ public final class SellerCooldownWidget extends AbstractWidget {
         y += mc.font.lineHeight + 3;
 
         for (SellerCooldownStore.Entry entry : entries) {
-            String state = entry.ready() ? "Готов" : Formatting.formatMillis(System.currentTimeMillis() + entry.remainingMillis());
+            String state = entry.ready() ? "Ready" : Formatting.formatMillis(System.currentTimeMillis() + entry.remainingMillis());
             int stateColor = entry.ready() ? WidgetTheme.TEXT_ACCENT : WidgetTheme.TEXT_SECONDARY;
             int stateWidth = mc.font.width(state);
 
@@ -97,7 +97,7 @@ public final class SellerCooldownWidget extends AbstractWidget {
 
         int maxWidth = mc.font.width("Sellers");
         for (SellerCooldownStore.Entry entry : entries) {
-            String state = entry.ready() ? "Готов" : Formatting.formatMillis(System.currentTimeMillis() + entry.remainingMillis());
+            String state = entry.ready() ? "Ready" : Formatting.formatMillis(System.currentTimeMillis() + entry.remainingMillis());
             maxWidth = Math.max(maxWidth, mc.font.width(entry.name() + ": " + state));
         }
         return maxWidth + PADDING_X * 2;

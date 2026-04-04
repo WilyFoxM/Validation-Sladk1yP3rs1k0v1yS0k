@@ -13,6 +13,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
+import ru.wilyfox.client.hud.widget.WidgetTheme;
 
 public final class PingMarkerRenderer {
     private static final boolean WORLD_RENDER_ENABLED = true;
@@ -28,6 +29,7 @@ public final class PingMarkerRenderer {
     private static final int ACCENT_HEIGHT = 2;
     private static final float PANEL_Z = 0.0f;
     private static final float ACCENT_Z = 0.001f;
+    private static final float TEXT_Z_OFFSET = 0.01f;
     private static final int LIGHT_COLOR = 0x00F000F0;
 
     private PingMarkerRenderer() {
@@ -56,7 +58,10 @@ public final class PingMarkerRenderer {
         Vec3 cameraPos = camera.getPosition();
 
         for (PingMarker marker : PingMarkerManager.getActiveMarkers()) {
-            Vec3 position = marker.position();
+            Vec3 position = PingMarkerManager.getRenderPosition(marker, partialTick);
+            if (position == null) {
+                continue;
+            }
             double distance = cameraPos.distanceTo(position);
             float alpha = getDistanceAlpha(distance);
             if (alpha <= 0.01f) {
@@ -98,9 +103,11 @@ public final class PingMarkerRenderer {
         fillQuad(vertexConsumer, matrix, x1, y1, x2, y2, PANEL_Z, backgroundColor);
         fillQuad(vertexConsumer, matrix, x1, y1, x2, y1 + ACCENT_HEIGHT, ACCENT_Z, accentColor);
 
-        int primaryTextColor = applyAlpha(PingMarkerPresentation.PRIMARY_TEXT_COLOR, alpha);
+        int primaryTextColor = applyAlpha(PingMarkerPresentation.getPrimaryTextColor(), alpha);
         float primaryTextX = -primaryWidth / 2.0f;
         float primaryTextY = y1 + PANEL_PADDING_Y;
+        poseStack.pushPose();
+        poseStack.translate(0.0F, 0.0F, TEXT_Z_OFFSET);
         Matrix4f textMatrix = poseStack.last().pose();
         Component primaryComponent = Component.literal(primaryText);
         int textBackground = (int) (Minecraft.getInstance().options.getBackgroundOpacity(0.25f) * 255.0f) << 24;
@@ -121,7 +128,7 @@ public final class PingMarkerRenderer {
                 primaryComponent,
                 primaryTextX,
                 primaryTextY,
-                0xFFFFFFFF,
+                WidgetTheme.TOOLTIP_TEXT,
                 false,
                 textMatrix,
                 bufferSource,
@@ -130,7 +137,7 @@ public final class PingMarkerRenderer {
                 LightTexture.lightCoordsWithEmission(LIGHT_COLOR, 2)
         );
         if (hasSecondaryLine) {
-            int secondaryTextColor = applyAlpha(PingMarkerPresentation.SECONDARY_TEXT_COLOR, alpha);
+            int secondaryTextColor = applyAlpha(PingMarkerPresentation.getSecondaryTextColor(), alpha);
             float secondaryTextX = -secondaryWidth / 2.0f;
             float secondaryTextY = primaryTextY + font.lineHeight - 1.0f;
             Component secondaryComponent = Component.literal(secondaryText);
@@ -151,7 +158,7 @@ public final class PingMarkerRenderer {
                     secondaryComponent,
                     secondaryTextX,
                     secondaryTextY,
-                    0xFFE4E4E4,
+                    WidgetTheme.TEXT_SOFT,
                     false,
                     textMatrix,
                     bufferSource,
@@ -160,6 +167,7 @@ public final class PingMarkerRenderer {
                     LightTexture.lightCoordsWithEmission(LIGHT_COLOR, 2)
             );
         }
+        poseStack.popPose();
     }
 
     private static void fillQuad(VertexConsumer vertexConsumer, Matrix4f matrix, int x1, int y1, int x2, int y2, float z, int argb) {

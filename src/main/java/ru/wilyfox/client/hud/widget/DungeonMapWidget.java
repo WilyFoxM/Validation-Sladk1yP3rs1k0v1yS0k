@@ -110,7 +110,7 @@ public final class DungeonMapWidget extends AbstractWidget {
         context.fill(0, 0, 1, OUTER_SIZE, WidgetTheme.ACCENT_LINE);
         context.fill(OUTER_SIZE - 1, 0, OUTER_SIZE, OUTER_SIZE, WidgetTheme.ACCENT_LINE);
 
-        int gridColor = 0x33404A52;
+        int gridColor = WidgetTheme.GRID_LINE;
         for (int offset = 18; offset < OUTER_SIZE - 18; offset += 18) {
             context.fill(offset, 12, offset + 1, OUTER_SIZE - 12, gridColor);
             context.fill(12, offset, OUTER_SIZE - 12, offset + 1, gridColor);

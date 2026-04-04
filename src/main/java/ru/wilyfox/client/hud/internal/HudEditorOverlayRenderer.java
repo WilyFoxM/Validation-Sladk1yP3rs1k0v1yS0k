@@ -8,6 +8,7 @@ import ru.wilyfox.client.hud.indicators.ScreenAnchor;
 import ru.wilyfox.client.hud.widget.AbstractWidget;
 import ru.wilyfox.client.hud.widget.Widget;
 import ru.wilyfox.client.hud.widget.WidgetCorner;
+import ru.wilyfox.client.hud.widget.WidgetTheme;
 import ru.wilyfox.client.hud.widget.WidgetUtils;
 
 import java.util.ArrayList;
@@ -29,7 +30,7 @@ public final class HudEditorOverlayRenderer {
                 bounds.y() - padding,
                 bounds.width() + padding * 2,
                 bounds.height() + padding * 2,
-                0xFFFFFFFF
+                WidgetTheme.OUTLINE_ACTIVE
         );
     }
 
@@ -67,7 +68,7 @@ public final class HudEditorOverlayRenderer {
                     activeTargetCornerIndicator.getWidget().getStartY() - padding,
                     activeTargetCornerIndicator.getWidget().getWidth() + padding * 2,
                     activeTargetCornerIndicator.getWidget().getHeight() + padding * 2,
-                    0xFFFFFFFF
+                    WidgetTheme.OUTLINE_ACTIVE
             );
         }
 
@@ -78,7 +79,7 @@ public final class HudEditorOverlayRenderer {
                     activeTargetCornerIndicator.getWidget().getStartY() - padding,
                     activeTargetCornerIndicator.getWidget().getWidth() + padding * 2,
                     activeTargetCornerIndicator.getWidget().getHeight() + padding * 2,
-                    0xFFFFFFFF
+                    WidgetTheme.OUTLINE_ACTIVE
             );
         }
 
@@ -89,7 +90,7 @@ public final class HudEditorOverlayRenderer {
                     activeTargetCornerIndicator.getWidget().getStartY() - padding,
                     activeTargetCornerIndicator.getWidget().getWidth() + padding * 2,
                     activeTargetCornerIndicator.getWidget().getHeight() + padding * 2,
-                    0xFFFFFFFF
+                    WidgetTheme.OUTLINE_ACTIVE
             );
         }
 
@@ -100,7 +101,7 @@ public final class HudEditorOverlayRenderer {
                     activeTargetCornerIndicator.getWidget().getStartY() - padding,
                     activeTargetCornerIndicator.getWidget().getWidth() + padding * 2,
                     activeTargetCornerIndicator.getWidget().getHeight() + padding * 2,
-                    0xFFFFFFFF
+                    WidgetTheme.OUTLINE_ACTIVE
             );
         }
     }
@@ -118,7 +119,7 @@ public final class HudEditorOverlayRenderer {
         }
 
         float labelScale = 0.95f;
-        String text = "Р“СЂСѓРїРїР°: " + groupSize;
+        String text = "Group: " + groupSize;
 
         int paddingX = Math.round(6 * labelScale);
         int baseHeight = Minecraft.getInstance().font.lineHeight + 4;
@@ -141,13 +142,13 @@ public final class HudEditorOverlayRenderer {
             x = 2;
         }
 
-        context.fill(x, y, x + width, y + height, 0xA0141414);
-        context.fill(x, y, x + width, y + 1, 0xB0D8D8D8);
+        context.fill(x, y, x + width, y + height, WidgetTheme.TOOLTIP_BG);
+        context.fill(x, y, x + width, y + 1, WidgetTheme.ACCENT_LINE);
 
         context.pose().pushPose();
         context.pose().translate(x + paddingX, y + (height - Minecraft.getInstance().font.lineHeight * labelScale) / 2.0f, 0);
         context.pose().scale(labelScale, labelScale, 1.0f);
-        context.drawString(Minecraft.getInstance().font, text, 0, 0, 0xFFF2F2F2);
+        context.drawString(Minecraft.getInstance().font, text, 0, 0, WidgetTheme.TOOLTIP_TEXT);
         context.pose().popPose();
     }
 
@@ -158,7 +159,7 @@ public final class HudEditorOverlayRenderer {
 
         float labelScale = 0.85f + (scalableWidget.getScale() - 1.0f) * 0.35f;
         labelScale = Math.max(0.7f, Math.min(1.1f, labelScale));
-        String text = hovered.getDisplayName() + " В· " + String.format("x%.2f", scalableWidget.getScale());
+        String text = hovered.getDisplayName() + " x" + String.format("%.2f", scalableWidget.getScale());
 
         int paddingX = Math.round(6 * labelScale);
         int baseHeight = Minecraft.getInstance().font.lineHeight + 4;
@@ -181,13 +182,13 @@ public final class HudEditorOverlayRenderer {
             x = 2;
         }
 
-        context.fill(x, y, x + width, y + height, 0xA0141414);
-        context.fill(x, y, x + width, y + 1, 0xB0D8D8D8);
+        context.fill(x, y, x + width, y + height, WidgetTheme.TOOLTIP_BG);
+        context.fill(x, y, x + width, y + 1, WidgetTheme.ACCENT_LINE);
 
         context.pose().pushPose();
         context.pose().translate(x + paddingX, y + (height - Minecraft.getInstance().font.lineHeight * labelScale) / 2.0f, 0);
         context.pose().scale(labelScale, labelScale, 1.0f);
-        context.drawString(Minecraft.getInstance().font, text, 0, 0, 0xFFF2F2F2);
+        context.drawString(Minecraft.getInstance().font, text, 0, 0, WidgetTheme.TOOLTIP_TEXT);
         context.pose().popPose();
     }
 
@@ -230,7 +231,7 @@ public final class HudEditorOverlayRenderer {
             return;
         }
 
-        int color = (host.getActiveScreenAnchor() == anchor) ? 0xFFFFFFFF : 0xFFEEEEEE;
+        int color = host.getActiveScreenAnchor() == anchor ? WidgetTheme.OUTLINE_ACTIVE : WidgetTheme.OUTLINE_SOFT;
         int size = host.isCenterSideAnchor(anchor) ? getPulsingAnchorSize() : 10;
         WidgetUtils.drawAnchorPoint(context, x, y, color, size);
     }

@@ -377,7 +377,11 @@ public final class EntityInspectWidget extends AbstractWidget {
             return "";
         }
 
-        return value.replaceAll("§.", "").replaceAll("В§.", "").trim();
+        return value
+                .replaceAll("\u00A7.", "")
+                .replaceAll("\u0412\u00A7.", "")
+                .replaceAll("\u0420\u2019\u0412\u00A7.", "")
+                .trim();
     }
 
     private boolean isEditorPreview() {

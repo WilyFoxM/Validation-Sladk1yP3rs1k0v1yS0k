@@ -4,13 +4,12 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.phys.Vec3;
+import ru.wilyfox.client.hud.widget.WidgetTheme;
 import ru.wilyfox.client.hud.widget.WidgetUtils;
 import ru.wilyfox.utils.WorldToScreen;
 
 public final class AlchemyIngredientOverlayRenderer {
     private static final long LIFETIME_MS = 1000L;
-    private static final int MARKER_RGB = 0x85F6A0;
-
     private AlchemyIngredientOverlayRenderer() {
     }
 
@@ -39,7 +38,7 @@ public final class AlchemyIngredientOverlayRenderer {
             }
 
             int half = size / 2;
-            int color = withAlpha(MARKER_RGB, alpha);
+            int color = withAlpha(WidgetTheme.STATUS_SUCCESS, alpha);
             WidgetUtils.drawCorners(context, point.x() - half, point.y() - half, size, size, color);
         }
     }

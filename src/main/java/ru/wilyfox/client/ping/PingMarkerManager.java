@@ -1,6 +1,7 @@
 package ru.wilyfox.client.ping;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import ru.wilyfox.client.chat.FrogChatProtocol;
@@ -34,8 +35,29 @@ public final class PingMarkerManager {
 
     public static List<PingMarker> getActiveMarkers() {
         purgeExpired();
-        refreshTrackedEntityPositions();
         return List.copyOf(MARKERS);
+    }
+
+    public static Vec3 getRenderPosition(PingMarker marker, float partialTick) {
+        if (marker == null) {
+            return null;
+        }
+
+        UUID entityUuid = marker.entityUuid();
+        if (entityUuid == null) {
+            return marker.position();
+        }
+
+        Entity entity = findEntityByUuid(entityUuid);
+        if (entity == null) {
+            return marker.position();
+        }
+
+        return new Vec3(
+                Mth.lerp(partialTick, entity.xOld, entity.getX()),
+                Mth.lerp(partialTick, entity.yOld, entity.getY()) + getEntityMarkerHeightOffset(entity),
+                Mth.lerp(partialTick, entity.zOld, entity.getZ())
+        );
     }
 
     public static void addLocalMarker(PingPayload payload) {
@@ -60,7 +82,12 @@ public final class PingMarkerManager {
         );
 
         synchronized (MARKERS) {
-            MARKERS.removeIf(existing -> isSameMarker(existing.payload(), payload));
+            String ownerKey = markerOwnerKey(payload);
+            if (ownerKey != null) {
+                MARKERS.removeIf(existing -> ownerKey.equals(markerOwnerKey(existing.payload())));
+            } else {
+                MARKERS.removeIf(existing -> isSameMarker(existing.payload(), payload));
+            }
             MARKERS.add(marker);
         }
     }
@@ -114,35 +141,6 @@ public final class PingMarkerManager {
         }
     }
 
-    private static void refreshTrackedEntityPositions() {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            return;
-        }
-
-        synchronized (MARKERS) {
-            for (int index = 0; index < MARKERS.size(); index++) {
-                PingMarker marker = MARKERS.get(index);
-                UUID entityUuid = marker.entityUuid();
-                if (entityUuid == null) {
-                    continue;
-                }
-
-                Entity entity = findEntityByUuid(entityUuid);
-                if (entity == null) {
-                    continue;
-                }
-
-                MARKERS.set(index, new PingMarker(
-                        marker.payload(),
-                        entity.position().add(0.0D, getEntityMarkerHeightOffset(entity), 0.0D),
-                        entityUuid,
-                        marker.receivedAt()
-                ));
-            }
-        }
-    }
-
     private static Entity findEntityByUuid(UUID entityUuid) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null) {
@@ -174,5 +172,14 @@ public final class PingMarkerManager {
     private static boolean isSameMarker(PingPayload left, PingPayload right) {
         return equalsIgnoreCase(left.author(), right.author())
                 && left.timestamp() == right.timestamp();
+    }
+
+    private static String markerOwnerKey(PingPayload payload) {
+        if (payload == null || payload.author() == null) {
+            return null;
+        }
+
+        String author = payload.author().trim();
+        return author.isBlank() ? null : author.toLowerCase(java.util.Locale.ROOT);
     }
 }

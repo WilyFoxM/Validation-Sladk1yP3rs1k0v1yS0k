@@ -4,6 +4,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.phys.Vec3;
+import ru.wilyfox.client.hud.widget.WidgetTheme;
 import ru.wilyfox.client.hud.widget.WidgetUtils;
 import ru.wilyfox.utils.WorldToScreen;
 
@@ -41,7 +42,7 @@ public final class FishingSpotOverlayRenderer {
             }
 
             int half = size / 2;
-            int color = withAlpha(0xFFFFFF, alpha);
+            int color = withAlpha(WidgetTheme.TEXT_SOFT, alpha);
 
             WidgetUtils.drawCorners(
                     context,

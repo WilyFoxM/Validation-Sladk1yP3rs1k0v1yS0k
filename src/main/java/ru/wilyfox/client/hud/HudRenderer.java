@@ -24,6 +24,7 @@ import ru.wilyfox.client.ping.PingMarkerOverlayRenderer;
 import ru.wilyfox.client.hud.widget.AbstractWidget;
 import ru.wilyfox.client.hud.widget.BossHudWidget;
 import ru.wilyfox.client.hud.widget.Widget;
+import ru.wilyfox.client.hud.widget.WidgetTheme;
 import ru.wilyfox.utils.MouseUtils;
 
 import java.util.ArrayList;
@@ -308,7 +309,7 @@ public class HudRenderer {
             AlchemyIngredientOverlayRenderer.render(context);
         }
 
-        PingMarkerOverlayRenderer.render(context);
+        PingMarkerOverlayRenderer.render(context, tickCounter.getGameTimeDeltaPartialTick(true));
     }
 
     public void renderLayer(HudLayer layer, GuiGraphics context, DeltaTracker tickCounter) {
@@ -656,7 +657,7 @@ public class HudRenderer {
         }
 
         float labelScale = 0.95f;
-        String text = "Группа: " + groupSize;
+        String text = "Group: " + groupSize;
 
         int paddingX = Math.round(6 * labelScale);
         int baseHeight = Minecraft.getInstance().font.lineHeight + 4;
@@ -679,8 +680,8 @@ public class HudRenderer {
             x = 2;
         }
 
-        context.fill(x, y, x + width, y + height, 0xA0141414);
-        context.fill(x, y, x + width, y + 1, 0xB0D8D8D8);
+        context.fill(x, y, x + width, y + height, WidgetTheme.TOOLTIP_BG);
+        context.fill(x, y, x + width, y + 1, WidgetTheme.ACCENT_LINE);
 
         context.pose().pushPose();
         context.pose().translate(x + paddingX, y + (height - Minecraft.getInstance().font.lineHeight * labelScale) / 2.0f, 0);
@@ -691,7 +692,7 @@ public class HudRenderer {
                 text,
                 0,
                 0,
-                0xFFF2F2F2
+                WidgetTheme.TOOLTIP_TEXT
         );
 
         context.pose().popPose();
@@ -704,7 +705,7 @@ public class HudRenderer {
 
         float labelScale = 0.85f + (scalableWidget.getScale() - 1.0f) * 0.35f;
         labelScale = Math.max(0.7f, Math.min(1.1f, labelScale));
-        String text = hovered.getDisplayName() + " · " + String.format("x%.2f", scalableWidget.getScale());
+        String text = hovered.getDisplayName() + " x" + String.format("%.2f", scalableWidget.getScale());
 
         int paddingX = Math.round(6 * labelScale);
         int baseHeight = Minecraft.getInstance().font.lineHeight + 4;
@@ -727,8 +728,8 @@ public class HudRenderer {
             x = 2;
         }
 
-        context.fill(x, y, x + width, y + height, 0xA0141414);
-        context.fill(x, y, x + width, y + 1, 0xB0D8D8D8);
+        context.fill(x, y, x + width, y + height, WidgetTheme.TOOLTIP_BG);
+        context.fill(x, y, x + width, y + 1, WidgetTheme.ACCENT_LINE);
 
         context.pose().pushPose();
         context.pose().translate(x + paddingX, y + (height - Minecraft.getInstance().font.lineHeight * labelScale) / 2.0f, 0);
@@ -739,7 +740,7 @@ public class HudRenderer {
                 text,
                 0,
                 0,
-                0xFFF2F2F2
+                WidgetTheme.TOOLTIP_TEXT
         );
 
         context.pose().popPose();

@@ -20,6 +20,11 @@ public final class WidgetTheme {
     public static int STATUS_ERROR = 0xFFE3C7C7;
     public static int BAR_BG = 0x66000000;
     public static int BAR_FILL = 0xD8D6D6D6;
+    public static int OUTLINE_ACTIVE = 0xFFFFFFFF;
+    public static int OUTLINE_SOFT = 0xFFEEEEEE;
+    public static int TOOLTIP_BG = 0xA0141414;
+    public static int TOOLTIP_TEXT = 0xFFF2F2F2;
+    public static int GRID_LINE = 0x33404A52;
 
     private WidgetTheme() {
     }
@@ -166,6 +171,11 @@ public final class WidgetTheme {
         STATUS_ERROR = 0xFF000000 | statusErrorRgb;
         BAR_BG = 0xA0000000 | barBgRgb;
         BAR_FILL = 0xE0000000 | barFillRgb;
+        OUTLINE_ACTIVE = withAlpha(TITLE, 0xFF);
+        OUTLINE_SOFT = withAlpha(TEXT_SOFT, 0xFF);
+        TOOLTIP_BG = withAlpha(PANEL_BG, 0xA0);
+        TOOLTIP_TEXT = withAlpha(TEXT_SOFT, 0xFF);
+        GRID_LINE = withAlpha(TEXT_MUTED, 0x33);
     }
 
     private static void applyCustomPalette(int accentRgb) {
@@ -201,5 +211,9 @@ public final class WidgetTheme {
                 barBgRgb,
                 barFillRgb
         );
+    }
+
+    public static int withAlpha(int argb, int alpha) {
+        return ((alpha & 0xFF) << 24) | (argb & 0x00FFFFFF);
     }
 }

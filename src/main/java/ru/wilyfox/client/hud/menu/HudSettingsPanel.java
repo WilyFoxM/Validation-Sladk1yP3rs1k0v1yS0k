@@ -488,15 +488,6 @@ public class HudSettingsPanel {
                 )
         );
 
-        componentsByCategory.get(SettingsCategory.BLOCKS_PER_SECOND).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Active",
-                        () -> ConfigManager.get().blocksPerSecondWidget.active,
-                        value -> ConfigManager.get().blocksPerSecondWidget.active = value
-                )
-        );
-
         componentsByCategory.get(SettingsCategory.FISHING).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
@@ -774,15 +765,7 @@ public class HudSettingsPanel {
                 )
         );
 
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Alchemy markers",
-                        () -> ConfigManager.get().render.showAlchemyIngredientMarkers,
-                        value -> ConfigManager.get().render.showAlchemyIngredientMarkers = value
-                )
-        );
-
+        componentsByCategory.get(SettingsCategory.RENDER).add(new BreakLineSettingsComponent("Visual"));
         componentsByCategory.get(SettingsCategory.RENDER).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
@@ -791,7 +774,6 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().render.hideBlockBreakParticles = value
                 )
         );
-
         componentsByCategory.get(SettingsCategory.RENDER).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
@@ -800,7 +782,6 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().render.hideLightningEffect = value
                 )
         );
-
         componentsByCategory.get(SettingsCategory.RENDER).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
@@ -809,16 +790,6 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().render.hideHurtCameraShake = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Static hand",
-                        () -> ConfigManager.get().render.staticHand,
-                        value -> ConfigManager.get().render.staticHand = value
-                )
-        );
-
         componentsByCategory.get(SettingsCategory.RENDER).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
@@ -827,53 +798,6 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().render.hideFireOverlay = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Tone-down chat",
-                        () -> ConfigManager.get().render.toneDownChat,
-                        value -> ConfigManager.get().render.toneDownChat = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Chat timestamps",
-                        () -> ConfigManager.get().render.chatTimestamps,
-                        value -> ConfigManager.get().render.chatTimestamps = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Copy chat by RMB",
-                        () -> ConfigManager.get().render.copyChatMessages,
-                        value -> ConfigManager.get().render.copyChatMessages = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new StepperSettingsComponent(
-                        0, 0, 0, 0,
-                        "Extra chat history",
-                        () -> ConfigManager.get().render.extraChatHistoryLines,
-                        value -> ConfigManager.get().render.extraChatHistoryLines = value,
-                        0, 900, 50
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Auto thx",
-                        () -> ConfigManager.get().render.autoThanks,
-                        value -> ConfigManager.get().render.autoThanks = value
-                )
-        );
-
         componentsByCategory.get(SettingsCategory.RENDER).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
@@ -883,7 +807,87 @@ public class HudSettingsPanel {
                 )
         );
 
+        componentsByCategory.get(SettingsCategory.RENDER).add(new BreakLineSettingsComponent("Animation"));
         componentsByCategory.get(SettingsCategory.RENDER).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Static hand",
+                        () -> ConfigManager.get().render.staticHand,
+                        value -> ConfigManager.get().render.staticHand = value
+                )
+        );
+
+        componentsByCategory.get(SettingsCategory.RENDER).add(new BreakLineSettingsComponent("Highlights"));
+        componentsByCategory.get(SettingsCategory.RENDER).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Alchemy markers",
+                        () -> ConfigManager.get().render.showAlchemyIngredientMarkers,
+                        value -> ConfigManager.get().render.showAlchemyIngredientMarkers = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.RENDER).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Dungeon decorations highlight",
+                        () -> ConfigManager.get().render.dungeonDecorationHighlight,
+                        value -> ConfigManager.get().render.dungeonDecorationHighlight = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.RENDER).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Useful items highlight",
+                        () -> ConfigManager.get().render.usefulItemsHighlight,
+                        value -> ConfigManager.get().render.usefulItemsHighlight = value
+                )
+        );
+
+        componentsByCategory.get(SettingsCategory.RENDER).add(new BreakLineSettingsComponent("Utility"));
+        componentsByCategory.get(SettingsCategory.RENDER).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Tone-down chat",
+                        () -> ConfigManager.get().render.toneDownChat,
+                        value -> ConfigManager.get().render.toneDownChat = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.RENDER).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Chat timestamps",
+                        () -> ConfigManager.get().render.chatTimestamps,
+                        value -> ConfigManager.get().render.chatTimestamps = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.RENDER).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Copy chat by RMB",
+                        () -> ConfigManager.get().render.copyChatMessages,
+                        value -> ConfigManager.get().render.copyChatMessages = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.RENDER).add(
+                new StepperSettingsComponent(
+                        0, 0, 0, 0,
+                        "Extra chat history",
+                        () -> ConfigManager.get().render.extraChatHistoryLines,
+                        value -> ConfigManager.get().render.extraChatHistoryLines = value,
+                        0, 900, 50
+                )
+        );
+        componentsByCategory.get(SettingsCategory.RENDER).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Auto thx",
+                        () -> ConfigManager.get().render.autoThanks,
+                        value -> ConfigManager.get().render.autoThanks = value
+                )
+        );
+
+        componentsByCategory.get(SettingsCategory.WIDGET).add(new BreakLineSettingsComponent("Core"));
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Render BossBar as Widget",
@@ -891,8 +895,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().bossBar.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Render Scoreboard as Widget",
@@ -900,8 +903,33 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().scoreboard.active = value
                 )
         );
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show Chat Queue Widget",
+                        () -> ConfigManager.get().outgoingChatQueue.active,
+                        value -> ConfigManager.get().outgoingChatQueue.active = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show Level Progress Widget",
+                        () -> ConfigManager.get().levelProgress.active,
+                        value -> ConfigManager.get().levelProgress.active = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show Block Counter Widget",
+                        () -> ConfigManager.get().blocksPerSecondWidget.active,
+                        value -> ConfigManager.get().blocksPerSecondWidget.active = value
+                )
+        );
 
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(new BreakLineSettingsComponent("Recipes"));
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Potion Recipe Widget",
@@ -909,8 +937,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().potionRecipe.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Craft Recipe Widget",
@@ -918,8 +945,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().craftRecipe.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Compact Craft Recipe",
@@ -928,7 +954,8 @@ public class HudSettingsPanel {
                 )
         );
 
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(new BreakLineSettingsComponent("Status"));
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Boosters Widget",
@@ -936,8 +963,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().boosters.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Compact Boosters",
@@ -945,8 +971,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().boosters.compact = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new CycleSettingsComponent<>(
                         0, 0, 0, 0,
                         "Money base",
@@ -956,8 +981,7 @@ public class HudSettingsPanel {
                         value -> "x" + String.format(java.util.Locale.US, "%.1f", value / 10.0)
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new CycleSettingsComponent<>(
                         0, 0, 0, 0,
                         "Shards base",
@@ -967,8 +991,7 @@ public class HudSettingsPanel {
                         value -> "x" + String.format(java.util.Locale.US, "%.1f", value / 10.0)
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Potions Widget",
@@ -976,8 +999,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().potionTimers.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Seller Cooldowns",
@@ -985,8 +1007,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().sellerCooldown.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Combo Progress",
@@ -994,8 +1015,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().comboProgress.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Wand Cooldown Widget",
@@ -1003,8 +1023,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().wandCooldown.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Ability Cooldown Widget",
@@ -1012,7 +1031,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().abilityCooldown.active = value
                 )
         );
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Active Runes Widget",
@@ -1020,8 +1039,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().activeRunes.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Active Pets Widget",
@@ -1029,8 +1047,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().activePets.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Miners Widget",
@@ -1038,8 +1055,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().activeMiners.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Boss Damage Widget",
@@ -1047,44 +1063,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().bossDamage.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Dungeon Decorations Highlight",
-                        () -> ConfigManager.get().render.dungeonDecorationHighlight,
-                        value -> ConfigManager.get().render.dungeonDecorationHighlight = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Useful Items Highlight",
-                        () -> ConfigManager.get().render.usefulItemsHighlight,
-                        value -> ConfigManager.get().render.usefulItemsHighlight = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Show Dungeon / Siege Map Widget",
-                        () -> ConfigManager.get().dungeonMap.active,
-                        value -> ConfigManager.get().dungeonMap.active = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Show Entity Inspect Widget",
-                        () -> ConfigManager.get().entityInspect.active,
-                        value -> ConfigManager.get().entityInspect.active = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Show Visibility Status Widget",
@@ -1092,8 +1071,7 @@ public class HudSettingsPanel {
                         value -> ConfigManager.get().visibilityStatus.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
                         "Compact Visibility Status",
@@ -1102,21 +1080,21 @@ public class HudSettingsPanel {
                 )
         );
 
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(new BreakLineSettingsComponent("Maps & Inspect"));
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
-                        "Show Chat Queue Widget",
-                        () -> ConfigManager.get().outgoingChatQueue.active,
-                        value -> ConfigManager.get().outgoingChatQueue.active = value
+                        "Show Dungeon / Siege Map Widget",
+                        () -> ConfigManager.get().dungeonMap.active,
+                        value -> ConfigManager.get().dungeonMap.active = value
                 )
         );
-
-        componentsByCategory.get(SettingsCategory.RENDER).add(
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
-                        "Show Level Progress Widget",
-                        () -> ConfigManager.get().levelProgress.active,
-                        value -> ConfigManager.get().levelProgress.active = value
+                        "Show Entity Inspect Widget",
+                        () -> ConfigManager.get().entityInspect.active,
+                        value -> ConfigManager.get().entityInspect.active = value
                 )
         );
 

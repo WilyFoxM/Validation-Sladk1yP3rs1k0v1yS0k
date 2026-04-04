@@ -2,6 +2,7 @@ package ru.wilyfox.client.chat;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import ru.wilyfox.client.hud.widget.WidgetTheme;
 
 import java.util.List;
 
@@ -44,17 +45,17 @@ public final class ChatTabOverlay {
 
             int bg;
             int textColor;
-            int accentColor = 0xFFD8D8D8;
+            int accentColor = WidgetTheme.ACCENT_LINE;
 
             if (active) {
-                bg = 0xB8323232;
-                textColor = 0xFFFFFFFF;
+                bg = activeTabBackground();
+                textColor = WidgetTheme.TITLE;
             } else if (hovered) {
-                bg = 0xAA262626;
-                textColor = 0xFFF0F0F0;
+                bg = hoveredTabBackground();
+                textColor = WidgetTheme.TEXT_SOFT;
             } else {
-                bg = 0x88181818;
-                textColor = 0xFFBEBEBE;
+                bg = idleTabBackground();
+                textColor = WidgetTheme.TEXT_SECONDARY;
             }
 
             graphics.fill(x, y, x + tabWidth, y + TAB_HEIGHT, bg);
@@ -127,12 +128,12 @@ public final class ChatTabOverlay {
 
     private void renderEmojiButton(GuiGraphics graphics, Minecraft minecraft, int x, int y, int mouseX, int mouseY, int screenHeight) {
         boolean hovered = isOverEmojiButton(mouseX, mouseY, x, screenHeight);
-        int bg = emojiMenuOpen ? 0xB8323232 : (hovered ? 0xAA262626 : 0x88181818);
-        int textColor = emojiMenuOpen ? 0xFFFFFFFF : (hovered ? 0xFFF0F0F0 : 0xFFBEBEBE);
+        int bg = emojiMenuOpen ? activeTabBackground() : (hovered ? hoveredTabBackground() : idleTabBackground());
+        int textColor = emojiMenuOpen ? WidgetTheme.TITLE : (hovered ? WidgetTheme.TEXT_SOFT : WidgetTheme.TEXT_SECONDARY);
 
         graphics.fill(x, y, x + EMOJI_BUTTON_WIDTH, y + TAB_HEIGHT, bg);
         if (emojiMenuOpen) {
-            graphics.fill(x, y + TAB_HEIGHT - 1, x + EMOJI_BUTTON_WIDTH, y + TAB_HEIGHT, 0xFFD8D8D8);
+            graphics.fill(x, y + TAB_HEIGHT - 1, x + EMOJI_BUTTON_WIDTH, y + TAB_HEIGHT, WidgetTheme.ACCENT_LINE);
         }
 
         graphics.drawCenteredString(
@@ -153,8 +154,8 @@ public final class ChatTabOverlay {
         int panelX = bounds[0];
         int panelY = bounds[1];
 
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, 0xD0141414);
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, 0xB0D8D8D8);
+        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, WidgetTheme.withAlpha(WidgetTheme.PANEL_BG, 0xD0));
+        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, WidgetTheme.withAlpha(WidgetTheme.ACCENT_LINE, 0xB0));
 
         for (int index = 0; index < emojis.size(); index++) {
             int column = index % EMOJI_GRID_COLUMNS;
@@ -164,15 +165,31 @@ public final class ChatTabOverlay {
             boolean hovered = mouseX >= cellX && mouseX <= cellX + EMOJI_CELL_SIZE
                     && mouseY >= cellY && mouseY <= cellY + EMOJI_CELL_SIZE;
 
-            graphics.fill(cellX, cellY, cellX + EMOJI_CELL_SIZE, cellY + EMOJI_CELL_SIZE, hovered ? 0xAA323232 : 0x88222222);
+            graphics.fill(cellX, cellY, cellX + EMOJI_CELL_SIZE, cellY + EMOJI_CELL_SIZE, hovered ? hoveredTabBackground() : idleEmojiCellBackground());
             graphics.drawCenteredString(
                     minecraft.font,
                     emojis.get(index).symbol(),
                     cellX + EMOJI_CELL_SIZE / 2,
                     cellY + (EMOJI_CELL_SIZE - minecraft.font.lineHeight) / 2,
-                    hovered ? 0xFFFFFFFF : 0xFFE4E4E4
+                    hovered ? WidgetTheme.TITLE : WidgetTheme.TEXT_SOFT
             );
         }
+    }
+
+    private int activeTabBackground() {
+        return WidgetTheme.withAlpha(WidgetTheme.PANEL_BG_SOFT, 0xB8);
+    }
+
+    private int hoveredTabBackground() {
+        return WidgetTheme.withAlpha(WidgetTheme.PANEL_BG, 0xAA);
+    }
+
+    private int idleTabBackground() {
+        return WidgetTheme.withAlpha(WidgetTheme.BAR_BG, 0x88);
+    }
+
+    private int idleEmojiCellBackground() {
+        return WidgetTheme.withAlpha(WidgetTheme.PANEL_BG_SOFT, 0x88);
     }
 
     private boolean isOverEmojiButton(double mouseX, double mouseY, int buttonX, int screenHeight) {

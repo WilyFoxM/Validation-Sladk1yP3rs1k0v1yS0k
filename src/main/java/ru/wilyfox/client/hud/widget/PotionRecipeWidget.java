@@ -53,7 +53,7 @@ public class PotionRecipeWidget extends AbstractWidget {
         context.drawString(mc.font, tracker.getTitle(), PADDING_X, y, WidgetTheme.TITLE);
         y += lineHeight + 2;
 
-        context.drawString(mc.font, "Р РµС†РµРїС‚:", PADDING_X, y, WidgetTheme.TEXT_SECONDARY);
+        context.drawString(mc.font, "Recipe:", PADDING_X, y, WidgetTheme.TEXT_SECONDARY);
         y += lineHeight;
 
         for (String line : recipeLines) {
@@ -93,7 +93,7 @@ public class PotionRecipeWidget extends AbstractWidget {
         PotionRecipeTracker tracker = PotionRecipeTracker.getInstance();
 
         int maxWidth = mc.font.width(tracker.getTitle());
-        maxWidth = Math.max(maxWidth, mc.font.width("Р РµС†РµРїС‚:"));
+        maxWidth = Math.max(maxWidth, mc.font.width("Recipe:"));
 
         for (String line : tracker.getRecipeLines()) {
             maxWidth = Math.max(maxWidth, mc.font.width(line));

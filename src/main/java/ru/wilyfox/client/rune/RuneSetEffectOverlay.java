@@ -148,8 +148,6 @@ public final class RuneSetEffectOverlay {
 
         if (longestCooldown > 0L) {
             RuneSetCooldownStore.update(longestCooldown);
-        } else {
-            RuneSetCooldownStore.clear();
         }
     }
 

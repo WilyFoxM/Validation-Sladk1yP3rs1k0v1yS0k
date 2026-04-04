@@ -15,6 +15,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.hud.widget.WidgetTheme;
 
 public final class PlayerHealthBarRenderer {
     private static final float WORLD_SCALE = 0.025f;
@@ -29,11 +30,6 @@ public final class PlayerHealthBarRenderer {
     private static final double FADE_START_DISTANCE = 8.0;
     private static final double FADE_END_DISTANCE = 20.0;
     private static final float MIN_DISTANCE_ALPHA = 0.12f;
-    private static final int NORMAL_FILL_COLOR = 0xB8ECECEC;
-    private static final int LOW_HEALTH_FILL_COLOR = 0xD8D85A5A;
-    private static final int NORMAL_ACCENT_COLOR = 0xAAD0D0D0;
-    private static final int LOW_HEALTH_ACCENT_COLOR = 0xF0FF4D4D;
-
     private PlayerHealthBarRenderer() {
     }
 
@@ -114,7 +110,10 @@ public final class PlayerHealthBarRenderer {
         VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.debugQuads());
 
         float finalAlpha = distanceAlpha * opacityMultiplier;
-        int panelColor = applyAlpha(lowHealth ? 0x9E1A1A1A : 0x82191919, finalAlpha);
+        int panelBaseColor = lowHealth
+                ? WidgetTheme.withAlpha(WidgetTheme.PANEL_BG, 0x9E)
+                : WidgetTheme.withAlpha(WidgetTheme.PANEL_BG_SOFT, 0x82);
+        int panelColor = applyAlpha(panelBaseColor, finalAlpha);
         int accentColor = applyAlpha(getAccentColor(progress), finalAlpha);
         int fillColor = applyAlpha(getFillColor(progress), finalAlpha);
 
@@ -146,12 +145,20 @@ public final class PlayerHealthBarRenderer {
 
     private static int getFillColor(float progress) {
         float lowHealthBlend = Mth.clamp((0.50f - progress) / 0.35f, 0.0f, 1.0f);
-        return lerpArgb(NORMAL_FILL_COLOR, LOW_HEALTH_FILL_COLOR, lowHealthBlend);
+        return lerpArgb(
+                WidgetTheme.withAlpha(WidgetTheme.BAR_FILL, 0xB8),
+                WidgetTheme.withAlpha(WidgetTheme.STATUS_ERROR, 0xD8),
+                lowHealthBlend
+        );
     }
 
     private static int getAccentColor(float progress) {
         float lowHealthBlend = Mth.clamp((0.40f - progress) / 0.20f, 0.0f, 1.0f);
-        return lerpArgb(NORMAL_ACCENT_COLOR, LOW_HEALTH_ACCENT_COLOR, lowHealthBlend);
+        return lerpArgb(
+                WidgetTheme.withAlpha(WidgetTheme.ACCENT_LINE, 0xAA),
+                WidgetTheme.withAlpha(WidgetTheme.STATUS_ERROR, 0xF0),
+                lowHealthBlend
+        );
     }
 
     private static int lerpArgb(int fromArgb, int toArgb, float t) {
