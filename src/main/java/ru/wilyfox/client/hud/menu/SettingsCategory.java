@@ -9,6 +9,7 @@ public enum SettingsCategory {
     FISHING("Fishing"),
     WAYPOINTS("WayPoints"),
     POP_UPS("Pop-Ups"),
+    DISCORD("Discord"),
     THEME("Theme"),
     RENDER("Render"),
     WIDGET("Widget"),

@@ -16,6 +16,7 @@ public abstract class AbstractWidget implements Widget {
     protected String snapTargetKey;
     protected WidgetCorner snapOwnCorner;
     protected WidgetCorner snapTargetCorner;
+    protected boolean hiddenInGameplay;
 
     protected AbstractWidget(int x, int y, HudLayer l) {
         this.startX = x;
@@ -125,5 +126,13 @@ public abstract class AbstractWidget implements Widget {
         this.snapTargetKey = null;
         this.snapOwnCorner = null;
         this.snapTargetCorner = null;
+    }
+
+    public boolean isHiddenInGameplay() {
+        return hiddenInGameplay;
+    }
+
+    public void setHiddenInGameplay(boolean hiddenInGameplay) {
+        this.hiddenInGameplay = hiddenInGameplay;
     }
 }

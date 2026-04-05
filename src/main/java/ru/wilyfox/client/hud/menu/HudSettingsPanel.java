@@ -2,6 +2,7 @@ package ru.wilyfox.client.hud.menu;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import ru.wilyfox.client.discord.DiscordRpcService;
 import ru.wilyfox.client.hud.config.AutoMessageEntryConfig;
 import ru.wilyfox.client.hud.config.BossTimerSourceMode;
 import ru.wilyfox.client.hud.config.ConfigManager;
@@ -765,6 +766,84 @@ public class HudSettingsPanel {
                 )
         );
 
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new StatusSettingsComponent(
+                        "RPC status",
+                        DiscordRpcService::getStatus
+                )
+        );
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Privacy mode",
+                        () -> ConfigManager.get().discordRpc.privacyMode,
+                        value -> ConfigManager.get().discordRpc.privacyMode = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show elapsed time",
+                        () -> ConfigManager.get().discordRpc.showElapsedTime,
+                        value -> ConfigManager.get().discordRpc.showElapsedTime = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show server",
+                        () -> ConfigManager.get().discordRpc.showServer,
+                        value -> ConfigManager.get().discordRpc.showServer = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show mirror",
+                        () -> ConfigManager.get().discordRpc.showMirror,
+                        value -> ConfigManager.get().discordRpc.showMirror = value
+                ).withIndent(18).withVisibility(() -> ConfigManager.get().discordRpc.showServer)
+        );
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show location",
+                        () -> ConfigManager.get().discordRpc.showLocation,
+                        value -> ConfigManager.get().discordRpc.showLocation = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show level",
+                        () -> ConfigManager.get().discordRpc.showLevel,
+                        value -> ConfigManager.get().discordRpc.showLevel = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show combo",
+                        () -> ConfigManager.get().discordRpc.showCombo,
+                        value -> ConfigManager.get().discordRpc.showCombo = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show game event",
+                        () -> ConfigManager.get().discordRpc.showGameEvent,
+                        value -> ConfigManager.get().discordRpc.showGameEvent = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.DISCORD).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Enable auto RPC",
+                        () -> ConfigManager.get().discordRpc.active,
+                        value -> ConfigManager.get().discordRpc.active = value
+                )
+        );
         componentsByCategory.get(SettingsCategory.RENDER).add(new BreakLineSettingsComponent("Visual"));
         componentsByCategory.get(SettingsCategory.RENDER).add(
                 new ToggleSettingsComponent(
@@ -840,7 +919,7 @@ public class HudSettingsPanel {
                         "Useful items highlight",
                         () -> ConfigManager.get().render.usefulItemsHighlight,
                         value -> ConfigManager.get().render.usefulItemsHighlight = value
-                )
+                ).withWarningTooltip("Performance sensitive")
         );
 
         componentsByCategory.get(SettingsCategory.RENDER).add(new BreakLineSettingsComponent("Utility"));
@@ -925,6 +1004,22 @@ public class HudSettingsPanel {
                         "Show Block Counter Widget",
                         () -> ConfigManager.get().blocksPerSecondWidget.active,
                         value -> ConfigManager.get().blocksPerSecondWidget.active = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Enable Estimated TPS Monitor",
+                        () -> ConfigManager.get().estimatedTps.enabled,
+                        value -> ConfigManager.get().estimatedTps.enabled = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
+                        "Show Estimated TPS Widget",
+                        () -> ConfigManager.get().estimatedTps.active,
+                        value -> ConfigManager.get().estimatedTps.active = value
                 )
         );
 

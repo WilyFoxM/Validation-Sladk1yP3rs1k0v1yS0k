@@ -78,6 +78,7 @@ public class ConfigManager {
         layout.snapTarget = widget.getSnapTargetKey();
         layout.snapOwnCorner = widget.getSnapOwnCorner();
         layout.snapTargetCorner = widget.getSnapTargetCorner();
+        layout.hiddenInGameplay = widget.isHiddenInGameplay();
         save();
     }
 
@@ -102,6 +103,7 @@ public class ConfigManager {
         if (sanitized.bossWidget == null) sanitized.bossWidget = new BossWidgetConfig();
         if (sanitized.clicker == null) sanitized.clicker = new ClickerConfig();
         if (sanitized.blocksPerSecondWidget == null) sanitized.blocksPerSecondWidget = new BlocksPerSecondWidgetConfig();
+        if (sanitized.estimatedTps == null) sanitized.estimatedTps = new EstimatedTpsConfig();
         if (sanitized.fishing == null) sanitized.fishing = new FishingConfig();
         if (sanitized.bossBar == null) sanitized.bossBar = new BossBarConfig();
         if (sanitized.scoreboard == null) sanitized.scoreboard = new ScoreboardConfig();
@@ -125,6 +127,7 @@ public class ConfigManager {
         if (sanitized.popUps == null) sanitized.popUps = new PopUpsConfig();
         if (sanitized.boosters == null) sanitized.boosters = new BoostersConfig();
         if (sanitized.bossRespawnMessages == null) sanitized.bossRespawnMessages = new BossRespawnMessagesConfig();
+        if (sanitized.discordRpc == null) sanitized.discordRpc = new DiscordRpcConfig();
         if (sanitized.wayPoints == null) sanitized.wayPoints = new WayPointsConfig();
         if (sanitized.quickAccess == null) sanitized.quickAccess = new QuickAccessConfig();
         if (sanitized.targets == null) sanitized.targets = new TargetListConfig();
@@ -147,6 +150,11 @@ public class ConfigManager {
             if (entry.message == null) entry.message = "";
             entry.delaySeconds = Math.max(1, entry.delaySeconds);
         }
+
+        if (sanitized.discordRpc.clientId == null) sanitized.discordRpc.clientId = "";
+        if (sanitized.discordRpc.largeImageKey == null) sanitized.discordRpc.largeImageKey = "froghelper";
+        if (sanitized.discordRpc.largeImageText == null) sanitized.discordRpc.largeImageText = "FrogHelper";
+        sanitized.discordRpc.updateIntervalSeconds = Math.max(1, Math.min(60, sanitized.discordRpc.updateIntervalSeconds));
 
         WidgetTheme.syncConfiguredTheme();
         return sanitized;

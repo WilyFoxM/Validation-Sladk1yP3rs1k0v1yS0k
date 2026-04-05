@@ -11,4 +11,5 @@ public class WidgetLayoutConfig {
     public String snapTarget;
     public WidgetCorner snapOwnCorner;
     public WidgetCorner snapTargetCorner;
+    public Boolean hiddenInGameplay;
 }

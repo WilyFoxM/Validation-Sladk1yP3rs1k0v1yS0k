@@ -19,6 +19,7 @@ import ru.wilyfox.client.clan.PlayerClanStorage;
 import ru.wilyfox.client.combo.ComboProgressStore;
 import ru.wilyfox.client.dungeon.DungeonDecorationHighlightRenderHook;
 import ru.wilyfox.client.dungeon.DungeonMapTracker;
+import ru.wilyfox.client.discord.DiscordRpcService;
 import ru.wilyfox.client.event.ClientEntityEventHandler;
 import ru.wilyfox.client.highlight.UsefulWorldHighlightRenderHook;
 import ru.wilyfox.client.hud.HudRenderer;
@@ -39,6 +40,7 @@ import ru.wilyfox.client.hud.widget.BoostersWidget;
 import ru.wilyfox.client.hud.widget.ComboProgressWidget;
 import ru.wilyfox.client.hud.widget.CraftRecipeWidget;
 import ru.wilyfox.client.hud.widget.EntityInspectWidget;
+import ru.wilyfox.client.hud.widget.EstimatedTpsWidget;
 import ru.wilyfox.client.hud.widget.FishingNibblesWidget;
 import ru.wilyfox.client.hud.widget.DungeonMapWidget;
 import ru.wilyfox.client.hud.widget.LevelProgressWidget;
@@ -59,6 +61,7 @@ import ru.wilyfox.client.potion.PotionStore;
 import ru.wilyfox.client.ping.PingMarkerManager;
 import ru.wilyfox.client.ping.PingMarkerRenderHook;
 import ru.wilyfox.client.popup.PopUpEventNotifier;
+import ru.wilyfox.client.performance.EstimatedTpsMonitor;
 import ru.wilyfox.client.quickaccess.QuickAccessInputHandler;
 import ru.wilyfox.client.rune.ActiveRunesStore;
 import ru.wilyfox.client.rune.RuneSetSwitcher;
@@ -118,6 +121,7 @@ public class Client {
         UsefulWorldHighlightRenderHook.register();
         PingMarkerManager.init();
         PingMarkerRenderHook.register();
+        EstimatedTpsMonitor.register();
         KeyBinds.register();
         RuneSetSwitcher.register();
         Clicker.register();
@@ -150,7 +154,10 @@ public class Client {
         DiamondWorldProtocolClient.bindComboProgressStore(comboProgressStore);
         DiamondWorldProtocolClient.bindBoosterStore(boosterStore);
         DiamondWorldProtocolClient.init();
-
+        DiscordRpcService.bindLevelProgressStore(levelProgressStore);
+        DiscordRpcService.bindComboProgressStore(comboProgressStore);
+        DiscordRpcService.bindBossDamageStore(bossDamageStore);
+        DiscordRpcService.register();
         final ResourceLocation FrogHelperLayer = ResourceLocation.fromNamespaceAndPath(MOD_ID, "hud-froghelper-layer");
 
         HudLayerRegistrationCallback.EVENT.register(layeredDrawer -> layeredDrawer.attachLayerBefore(IdentifiedLayer.CHAT, FrogHelperLayer, this.hudRenderer::render));
@@ -161,6 +168,10 @@ public class Client {
         );
         hudRenderer.registerWidget(
                 new BlocksPerSecondWidget(100, 100, HudLayer.CONTENT),
+                ScreenAnchor.HOTBAR_LEFT
+        );
+        hudRenderer.registerWidget(
+                new EstimatedTpsWidget(100, 130, HudLayer.CONTENT),
                 ScreenAnchor.HOTBAR_LEFT
         );
         hudRenderer.registerWidget(

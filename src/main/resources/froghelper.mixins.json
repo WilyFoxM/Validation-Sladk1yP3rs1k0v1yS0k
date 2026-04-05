@@ -11,6 +11,7 @@
 		"AbstractContainerScreenMixin",
 		"BlockBreakMixin",
 		"BossHealthOverlay",
+		"ConnectionMixin",
 		"GameRendererMixin",
 		"GuiScoreboardMixin",
 		"ItemInHandRendererMixin",

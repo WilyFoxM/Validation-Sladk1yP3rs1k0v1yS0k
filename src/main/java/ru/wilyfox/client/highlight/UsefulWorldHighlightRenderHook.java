@@ -35,11 +35,15 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.protocol.CurrentServerInfo;
+import ru.wilyfox.client.protocol.DiamondWorldProtocolClient;
+import ru.wilyfox.utils.Formatting;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,6 +53,8 @@ public final class UsefulWorldHighlightRenderHook {
     private static final int ENTITY_SCAN_INTERVAL_TICKS = 10;
     private static final int BLOCK_SCAN_REFRESH_TICKS = 100;
     private static final int DIRTY_CHUNK_RESCAN_LIMIT = 2;
+    private static final int CHUNK_SCAN_BUDGET_PER_FRAME = 3;
+    private static final long DIRTY_CHUNK_MARK_COOLDOWN_MS = 500L;
     private static final int HORIZONTAL_SCAN_RADIUS = 32;
     private static final int VERTICAL_SCAN_RADIUS = 20;
     private static final float LINE_ALPHA = 1.0F;
@@ -80,7 +86,9 @@ public final class UsefulWorldHighlightRenderHook {
     private static final List<ColoredBox> BLOCK_BOXES = new ArrayList<>();
     private static final List<ColoredBox> ENTITY_BOXES = new ArrayList<>();
     private static final Map<Long, ChunkScanResult> BLOCK_CHUNK_CACHE = new HashMap<>();
+    private static final Map<Long, Long> DIRTY_CHUNK_MARK_TIMES = new HashMap<>();
     private static final Set<Long> DIRTY_CHUNK_KEYS = new HashSet<>();
+    private static final LinkedHashSet<Long> PENDING_BLOCK_SCAN_KEYS = new LinkedHashSet<>();
     private static long lastEntityScanTick = Long.MIN_VALUE;
     private static long lastBlockRefreshTick = Long.MIN_VALUE;
     private static int lastMinChunkX = Integer.MIN_VALUE;
@@ -100,7 +108,24 @@ public final class UsefulWorldHighlightRenderHook {
             return;
         }
 
-        DIRTY_CHUNK_KEYS.add(ChunkPos.asLong(SectionPos.blockToSectionCoord(blockPos.getX()), SectionPos.blockToSectionCoord(blockPos.getZ())));
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) {
+            return;
+        }
+
+        if (!ConfigManager.get().render.usefulItemsHighlight || !isMineHighlightLocation()) {
+            return;
+        }
+
+        long chunkKey = ChunkPos.asLong(SectionPos.blockToSectionCoord(blockPos.getX()), SectionPos.blockToSectionCoord(blockPos.getZ()));
+        long now = System.currentTimeMillis();
+        Long lastMarkedAt = DIRTY_CHUNK_MARK_TIMES.get(chunkKey);
+        if (lastMarkedAt != null && now - lastMarkedAt < DIRTY_CHUNK_MARK_COOLDOWN_MS) {
+            return;
+        }
+
+        DIRTY_CHUNK_MARK_TIMES.put(chunkKey, now);
+        DIRTY_CHUNK_KEYS.add(chunkKey);
     }
 
     private static void onAfterEntities(WorldRenderContext context) {
@@ -147,6 +172,16 @@ public final class UsefulWorldHighlightRenderHook {
     }
 
     private static void refreshBlockCacheIfNeeded(Minecraft mc) {
+        if (!isMineHighlightLocation()) {
+            BLOCK_BOXES.clear();
+            BLOCK_CHUNK_CACHE.clear();
+            DIRTY_CHUNK_MARK_TIMES.clear();
+            DIRTY_CHUNK_KEYS.clear();
+            PENDING_BLOCK_SCAN_KEYS.clear();
+            lastBlockRefreshTick = mc.level.getGameTime();
+            return;
+        }
+
         long gameTime = mc.level.getGameTime();
         BlockPos playerPos = mc.player.blockPosition();
         int minChunkX = SectionPos.blockToSectionCoord(playerPos.getX() - HORIZONTAL_SCAN_RADIUS);
@@ -175,25 +210,19 @@ public final class UsefulWorldHighlightRenderHook {
             for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
                 long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
                 activeChunkKeys.add(chunkKey);
-                LevelChunk chunk = mc.level.getChunkSource().getChunkNow(chunkX, chunkZ);
-                if (chunk == null) {
-                    BLOCK_CHUNK_CACHE.remove(chunkKey);
-                    continue;
-                }
-
                 ChunkScanResult cached = BLOCK_CHUNK_CACHE.get(chunkKey);
                 if (cached == null || refreshExpired || chunkWindowChanged) {
-                    BLOCK_CHUNK_CACHE.put(chunkKey, scanChunk(mc, chunk));
+                    PENDING_BLOCK_SCAN_KEYS.add(chunkKey);
                 }
             }
         }
 
         BLOCK_CHUNK_CACHE.keySet().removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
+        DIRTY_CHUNK_MARK_TIMES.keySet().removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
+        PENDING_BLOCK_SCAN_KEYS.removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
 
-        BLOCK_BOXES.clear();
-        for (ChunkScanResult result : BLOCK_CHUNK_CACHE.values()) {
-            BLOCK_BOXES.addAll(result.boxes);
-        }
+        processPendingChunkScans(mc);
+        rebuildBlockBoxes();
 
         processDirtyChunks(mc, minChunkX, maxChunkX, minChunkZ, maxChunkZ);
     }
@@ -263,6 +292,40 @@ public final class UsefulWorldHighlightRenderHook {
         }
 
         DIRTY_CHUNK_KEYS.removeAll(rescannedChunkKeys);
+        rebuildBlockBoxes();
+    }
+
+    private static void processPendingChunkScans(Minecraft mc) {
+        if (PENDING_BLOCK_SCAN_KEYS.isEmpty()) {
+            return;
+        }
+
+        int scanned = 0;
+        List<Long> completedChunkKeys = new ArrayList<>();
+        for (long chunkKey : PENDING_BLOCK_SCAN_KEYS) {
+            int chunkX = ChunkPos.getX(chunkKey);
+            int chunkZ = ChunkPos.getZ(chunkKey);
+            LevelChunk chunk = mc.level.getChunkSource().getChunkNow(chunkX, chunkZ);
+            if (chunk == null) {
+                BLOCK_CHUNK_CACHE.remove(chunkKey);
+                completedChunkKeys.add(chunkKey);
+                continue;
+            }
+
+            BLOCK_CHUNK_CACHE.put(chunkKey, scanChunk(mc, chunk));
+            completedChunkKeys.add(chunkKey);
+            scanned++;
+            if (scanned >= CHUNK_SCAN_BUDGET_PER_FRAME) {
+                break;
+            }
+        }
+
+        if (!completedChunkKeys.isEmpty()) {
+            PENDING_BLOCK_SCAN_KEYS.removeAll(completedChunkKeys);
+        }
+    }
+
+    private static void rebuildBlockBoxes() {
         BLOCK_BOXES.clear();
         for (ChunkScanResult result : BLOCK_CHUNK_CACHE.values()) {
             BLOCK_BOXES.addAll(result.boxes);
@@ -286,11 +349,13 @@ public final class UsefulWorldHighlightRenderHook {
 
     private static void collectNearbyEntities(Minecraft mc) {
         AABB searchBox = mc.player.getBoundingBox().inflate(HORIZONTAL_SCAN_RADIUS, VERTICAL_SCAN_RADIUS, HORIZONTAL_SCAN_RADIUS);
-        for (Entity entity : mc.level.getEntities(mc.player, searchBox, candidate -> candidate != mc.player)) {
-            if (entity.isRemoved()) {
-                continue;
-            }
-
+        for (Entity entity : mc.level.getEntities(
+                mc.player,
+                searchBox,
+                candidate -> candidate != mc.player
+                        && !candidate.isRemoved()
+                        && isUsefulHighlightEntity(candidate)
+        )) {
             HighlightEntityType entityType = HighlightEntityType.from(entity);
             if (entityType == null) {
                 continue;
@@ -305,13 +370,21 @@ public final class UsefulWorldHighlightRenderHook {
         BLOCK_BOXES.clear();
         ENTITY_BOXES.clear();
         BLOCK_CHUNK_CACHE.clear();
+        DIRTY_CHUNK_MARK_TIMES.clear();
         DIRTY_CHUNK_KEYS.clear();
+        PENDING_BLOCK_SCAN_KEYS.clear();
         lastEntityScanTick = Long.MIN_VALUE;
         lastBlockRefreshTick = Long.MIN_VALUE;
         lastMinChunkX = Integer.MIN_VALUE;
         lastMaxChunkX = Integer.MIN_VALUE;
         lastMinChunkZ = Integer.MIN_VALUE;
         lastMaxChunkZ = Integer.MIN_VALUE;
+    }
+
+    private static boolean isUsefulHighlightEntity(Entity entity) {
+        return entity instanceof ArmorStand
+                || entity instanceof Interaction
+                || entity instanceof Display.ItemDisplay;
     }
 
     private record ColoredBox(AABB box, float red, float green, float blue) {
@@ -487,6 +560,10 @@ public final class UsefulWorldHighlightRenderHook {
         }
 
         private static HighlightBlockType from(BlockState blockState, BlockEntity blockEntity) {
+            if (!isMineHighlightLocation()) {
+                return null;
+            }
+
             if (blockState.getBlock() instanceof PlayerHeadBlock || blockState.getBlock() instanceof PlayerWallHeadBlock) {
                 String texture = readSkullTextureValue(blockEntity);
                 if (texture == null) {
@@ -567,6 +644,51 @@ public final class UsefulWorldHighlightRenderHook {
 
             return null;
         }
+    }
+
+    private static boolean isMineHighlightLocation() {
+        String locationId = normalizeLocationId(DiamondWorldProtocolClient.getCurrentGameLocation());
+        if (locationId == null) {
+            return false;
+        }
+
+        if (DiamondWorldProtocolClient.isDungeonLocation() || DiamondWorldProtocolClient.isSiegeLocation()) {
+            return false;
+        }
+
+        if (DiamondWorldProtocolClient.getFishingLocationIds().contains(locationId)) {
+            return false;
+        }
+
+        CurrentServerInfo serverInfo = DiamondWorldProtocolClient.getCurrentServerInfo();
+        if ("HUB".equals(serverInfo.family())) {
+            return false;
+        }
+
+        String sanitizedLocation = Formatting.sanitize(locationId).toLowerCase(java.util.Locale.ROOT);
+        if (sanitizedLocation.contains("hub")
+                || sanitizedLocation.contains("spawn")
+                || sanitizedLocation.contains("lobby")
+                || sanitizedLocation.contains("boss")
+                || sanitizedLocation.contains("kriger")
+                || sanitizedLocation.contains("guardian")
+                || sanitizedLocation.contains("fish")) {
+            return false;
+        }
+
+        return sanitizedLocation.contains("mine")
+                || sanitizedLocation.contains("shaft")
+                || sanitizedLocation.contains("quarry")
+                || sanitizedLocation.contains("cave");
+    }
+
+    private static String normalizeLocationId(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
+        return normalized.isBlank() ? null : normalized;
     }
 
     private static boolean matchesCustomModel(ItemStack stack, int modelId) {

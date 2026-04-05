@@ -14,6 +14,7 @@ public class HudConfig {
     public BossWidgetConfig bossWidget = new BossWidgetConfig();
     public ClickerConfig clicker = new ClickerConfig();
     public BlocksPerSecondWidgetConfig blocksPerSecondWidget = new BlocksPerSecondWidgetConfig();
+    public EstimatedTpsConfig estimatedTps = new EstimatedTpsConfig();
     public FishingConfig fishing = new FishingConfig();
     public BossBarConfig bossBar = new BossBarConfig();
     public ScoreboardConfig scoreboard = new ScoreboardConfig();
@@ -37,6 +38,7 @@ public class HudConfig {
     public PopUpsConfig popUps = new PopUpsConfig();
     public BoostersConfig boosters = new BoostersConfig();
     public BossRespawnMessagesConfig bossRespawnMessages = new BossRespawnMessagesConfig();
+    public DiscordRpcConfig discordRpc = new DiscordRpcConfig();
     public WayPointsConfig wayPoints = new WayPointsConfig();
     public QuickAccessConfig quickAccess = new QuickAccessConfig();
     public TargetListConfig targets = new TargetListConfig();

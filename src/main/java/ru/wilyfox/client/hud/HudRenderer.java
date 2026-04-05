@@ -45,6 +45,8 @@ public class HudRenderer {
     private final int WIDGET_SNAP_DISTANCE = 6;
     private final int GROUP_GAP = 5;
     private final int WIDGET_FRAME_PADDING = 4;
+    private final int EDITOR_CONTROL_SIZE = 10;
+    private final int EDITOR_CONTROL_MARGIN = 3;
     private final int HOTBAR_WIDTH = 182;
     private final int HOTBAR_HEIGHT = 22;
     private final int HOTBAR_ANCHOR_GAP = 6;
@@ -248,6 +250,9 @@ public class HudRenderer {
                 if (storedLayout.y != null) {
                     abstractWidget.setStartY(storedLayout.y);
                 }
+                if (storedLayout.hiddenInGameplay != null) {
+                    abstractWidget.setHiddenInGameplay(storedLayout.hiddenInGameplay);
+                }
                 if (storedLayout.snapTarget != null && storedLayout.snapOwnCorner != null && storedLayout.snapTargetCorner != null) {
                     abstractWidget.setWidgetSnap(storedLayout.snapTarget, storedLayout.snapOwnCorner, storedLayout.snapTargetCorner);
                 } else {
@@ -275,7 +280,7 @@ public class HudRenderer {
         updateSnappedWidgets();
 
         for (Widget widget : widgets) {
-            if (!widget.isVisible()) {
+            if (!shouldRenderWidget(widget, editing)) {
                 continue;
             }
 
@@ -285,6 +290,7 @@ public class HudRenderer {
         if (editing) {
             if (hoveredWidget != null) {
                 renderHoveredWidgetOutline(context, hoveredWidget);
+                renderHoveredWidgetMinimizeControl(context, hoveredWidget, mouseX, mouseY);
 
                 if (Screen.hasAltDown()) {
                     renderGroupTooltip(context, hoveredWidget);
@@ -314,7 +320,7 @@ public class HudRenderer {
 
     public void renderLayer(HudLayer layer, GuiGraphics context, DeltaTracker tickCounter) {
         for (Widget widget : widgets) {
-            if (!widget.isVisible()) {
+            if (!shouldRenderWidget(widget, editing)) {
                 continue;
             }
 
@@ -336,6 +342,11 @@ public class HudRenderer {
 
         Widget hovered = findTopHoveredWidget(mouseX, mouseY);
         if (hovered == null) {
+            return;
+        }
+
+        if (isOverMinimizeControl(hovered, mouseX, mouseY)) {
+            toggleWidgetGameplayHidden(hovered);
             return;
         }
 
@@ -476,7 +487,7 @@ public class HudRenderer {
         for (int i = widgets.size() - 1; i >= 0; i--) {
             Widget widget = widgets.get(i);
 
-            if (!widget.isVisible()) {
+            if (!shouldRenderWidget(widget, true)) {
                 continue;
             }
 
@@ -526,6 +537,30 @@ public class HudRenderer {
 
     private void renderHoveredWidgetOutline(GuiGraphics context, Widget hoveredWidget) {
         HudEditorOverlayRenderer.renderHoveredWidgetOutline(overlayHost, context, hoveredWidget);
+    }
+
+    private void renderHoveredWidgetMinimizeControl(GuiGraphics context, Widget hoveredWidget, double mouseX, double mouseY) {
+        if (!(hoveredWidget instanceof AbstractWidget abstractWidget)) {
+            return;
+        }
+
+        int x = getMinimizeControlX(hoveredWidget);
+        int y = getMinimizeControlY(hoveredWidget);
+        boolean hovered = mouseX >= x && mouseX <= x + EDITOR_CONTROL_SIZE
+                && mouseY >= y && mouseY <= y + EDITOR_CONTROL_SIZE;
+
+        int background = abstractWidget.isHiddenInGameplay()
+                ? WidgetTheme.withAlpha(WidgetTheme.STATUS_WARNING, hovered ? 0x96 : 0x72)
+                : WidgetTheme.withAlpha(WidgetTheme.PANEL_BG, hovered ? 0x9C : 0x72);
+        int lineColor = abstractWidget.isHiddenInGameplay() ? WidgetTheme.STATUS_WARNING : WidgetTheme.TEXT_SOFT;
+
+        context.fill(x, y, x + EDITOR_CONTROL_SIZE, y + EDITOR_CONTROL_SIZE, background);
+        context.fill(x, y, x + EDITOR_CONTROL_SIZE, y + 1, WidgetTheme.withAlpha(lineColor, 0xC8));
+
+        int lineLeft = x + 2;
+        int lineRight = x + EDITOR_CONTROL_SIZE - 2;
+        int lineY = y + EDITOR_CONTROL_SIZE - 3;
+        context.fill(lineLeft, lineY, lineRight, lineY + 1, WidgetTheme.withAlpha(lineColor, hovered ? 0xFF : 0xDC));
     }
 
     private void resolveWidgetOverlap(int screenWidth, int screenHeight) {
@@ -642,6 +677,44 @@ public class HudRenderer {
 
     private void renderWidgetSnapIndicators(GuiGraphics context) {
         HudEditorOverlayRenderer.renderWidgetSnapIndicators(overlayHost, context);
+    }
+
+    private boolean shouldRenderWidget(Widget widget, boolean editingMode) {
+        if (!widget.isVisible()) {
+            return false;
+        }
+
+        if (editingMode) {
+            return true;
+        }
+
+        return !(widget instanceof AbstractWidget abstractWidget) || !abstractWidget.isHiddenInGameplay();
+    }
+
+    private boolean isOverMinimizeControl(Widget widget, double mouseX, double mouseY) {
+        int x = getMinimizeControlX(widget);
+        int y = getMinimizeControlY(widget);
+        return mouseX >= x
+                && mouseX <= x + EDITOR_CONTROL_SIZE
+                && mouseY >= y
+                && mouseY <= y + EDITOR_CONTROL_SIZE;
+    }
+
+    private int getMinimizeControlX(Widget widget) {
+        return widget.getStartX() + Math.max(0, widget.getWidth() - EDITOR_CONTROL_SIZE - EDITOR_CONTROL_MARGIN);
+    }
+
+    private int getMinimizeControlY(Widget widget) {
+        return widget.getStartY() + EDITOR_CONTROL_MARGIN;
+    }
+
+    private void toggleWidgetGameplayHidden(Widget widget) {
+        if (!(widget instanceof AbstractWidget abstractWidget)) {
+            return;
+        }
+
+        abstractWidget.setHiddenInGameplay(!abstractWidget.isHiddenInGameplay());
+        ConfigManager.saveWidgetLayout(abstractWidget);
     }
 
     private void renderGroupTooltip(GuiGraphics context, Widget hovered) {
