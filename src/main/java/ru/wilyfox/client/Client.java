@@ -66,7 +66,6 @@ import ru.wilyfox.client.quickaccess.QuickAccessInputHandler;
 import ru.wilyfox.client.rune.ActiveRunesStore;
 import ru.wilyfox.client.rune.RuneSetSwitcher;
 import ru.wilyfox.client.seller.SellerCooldownStore;
-import ru.wilyfox.client.target.TargetHighlightRenderHook;
 import ru.wilyfox.client.utility.Clicker;
 import ru.wilyfox.client.utility.AutoFish;
 import ru.wilyfox.client.utility.HudInputHandler;
@@ -116,7 +115,6 @@ public class Client {
         DungeonMapTracker.getInstance().register();
 
         PlayerHealthBarRenderHook.register();
-        TargetHighlightRenderHook.register();
         DungeonDecorationHighlightRenderHook.register();
         UsefulWorldHighlightRenderHook.register();
         PingMarkerManager.init();
