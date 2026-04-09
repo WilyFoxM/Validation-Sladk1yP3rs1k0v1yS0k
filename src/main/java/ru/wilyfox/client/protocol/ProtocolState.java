@@ -50,6 +50,7 @@ final class ProtocolState {
     CurrentServerInfo currentServerInfo = CurrentServerInfo.unknown();
     DwGameEvent currentGameEvent = DwGameEvent.NONE;
     Map<String, String> clanInfo = new LinkedHashMap<>();
+    Map<String, Set<String>> bossCollectibles = new LinkedHashMap<>();
     String currentGameLocation;
     Set<String> fishingLocationIds = new LinkedHashSet<>();
     Map<String, String> fishingLocationNames = new LinkedHashMap<>();
@@ -73,6 +74,7 @@ final class ProtocolState {
         currentServerInfo = CurrentServerInfo.unknown();
         currentGameEvent = DwGameEvent.NONE;
         clanInfo = new LinkedHashMap<>();
+        bossCollectibles = new LinkedHashMap<>();
         currentGameLocation = null;
         fishingLocationIds = new LinkedHashSet<>();
         fishingLocationNames = new LinkedHashMap<>();

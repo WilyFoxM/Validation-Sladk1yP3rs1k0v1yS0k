@@ -34,6 +34,7 @@ public class HudConfig {
     public DungeonMapConfig dungeonMap = new DungeonMapConfig();
     public EntityInspectConfig entityInspect = new EntityInspectConfig();
     public OutgoingChatQueueConfig outgoingChatQueue = new OutgoingChatQueueConfig();
+    public ProtocolGraphWidgetConfig protocolGraphWidget = new ProtocolGraphWidgetConfig();
     public LevelProgressConfig levelProgress = new LevelProgressConfig();
     public PopUpsConfig popUps = new PopUpsConfig();
     public BoostersConfig boosters = new BoostersConfig();

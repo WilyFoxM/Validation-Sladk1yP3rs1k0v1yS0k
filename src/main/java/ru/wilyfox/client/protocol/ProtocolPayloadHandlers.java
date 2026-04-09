@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static ru.wilyfox.FrogHelper.LOGGER;
@@ -30,6 +31,8 @@ final class ProtocolPayloadHandlers {
     private static final int ABILITY_PREVIEW_LIMIT = 6;
     private static final int STAFF_PREVIEW_LIMIT = 6;
     private static final int BOOSTER_PREVIEW_LIMIT = 6;
+    private static final int BOSSCOLLECT_GROUP_PREVIEW_LIMIT = 6;
+    private static final int BOSSCOLLECT_VALUE_PREVIEW_LIMIT = 4;
 
     private ProtocolPayloadHandlers() {
     }
@@ -609,6 +612,57 @@ final class ProtocolPayloadHandlers {
             return true;
         } catch (Exception exception) {
             warn(LOGGER, "DW protocol: failed to parse bossdamage payload", exception);
+            return false;
+        }
+    }
+
+    static boolean handleBossCollect(ProtocolState state, byte[] data) {
+        try {
+            DwBossCollectPacket packet = DwBossCollectDecoder.decode(data);
+            state.bossCollectibles = new LinkedHashMap<>(packet.collectibles());
+
+            long nonEmptyGroups = packet.collectibles().values().stream()
+                    .filter(values -> !values.isEmpty())
+                    .count();
+            long totalEntries = packet.collectibles().values().stream()
+                    .mapToLong(Set::size)
+                    .sum();
+            String preview = packet.collectibles().entrySet().stream()
+                    .limit(BOSSCOLLECT_GROUP_PREVIEW_LIMIT)
+                    .map(entry -> {
+                        String valuesPreview = entry.getValue().stream()
+                                .sorted()
+                                .limit(BOSSCOLLECT_VALUE_PREVIEW_LIMIT)
+                                .collect(Collectors.joining(", "));
+                        String suffix = entry.getValue().size() > BOSSCOLLECT_VALUE_PREVIEW_LIMIT ? ", ..." : "";
+                        return entry.getKey() + "=" + entry.getValue().size() + (valuesPreview.isBlank() ? "" : " [" + valuesPreview + suffix + "]");
+                    })
+                    .collect(Collectors.joining(", "));
+
+            info(
+                    LOGGER,
+                    "DW protocol: bosscollect parsed successfully, groups={}, nonEmptyGroups={}, totalEntries={}, first={}",
+                    packet.collectibles().size(),
+                    nonEmptyGroups,
+                    totalEntries,
+                    preview.isBlank() ? "<empty>" : preview
+            );
+
+            if (!packet.collectibles().isEmpty()) {
+                String emptyGroups = packet.collectibles().entrySet().stream()
+                        .filter(entry -> entry.getValue().isEmpty())
+                        .map(Map.Entry::getKey)
+                        .sorted()
+                        .limit(BOSSCOLLECT_GROUP_PREVIEW_LIMIT)
+                        .collect(Collectors.joining(", "));
+                if (!emptyGroups.isBlank()) {
+                    info(LOGGER, "DW protocol: bosscollect empty groups preview={}", emptyGroups);
+                }
+            }
+
+            return true;
+        } catch (Exception exception) {
+            warn(LOGGER, "DW protocol: failed to parse bosscollect payload", exception);
             return false;
         }
     }

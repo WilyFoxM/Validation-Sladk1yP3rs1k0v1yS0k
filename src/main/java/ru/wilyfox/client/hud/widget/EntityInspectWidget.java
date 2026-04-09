@@ -18,7 +18,6 @@ import net.minecraft.world.level.block.NoteBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import ru.wilyfox.client.hud.HudEditingScreen;
 import ru.wilyfox.client.hud.config.ConfigManager;
 import ru.wilyfox.client.hud.layer.HudLayer;
 
@@ -55,10 +54,7 @@ public final class EntityInspectWidget extends AbstractWidget {
         Minecraft mc = Minecraft.getInstance();
         InspectSnapshot snapshot = buildSnapshot(mc);
         if (snapshot == null) {
-            if (!isEditorPreview()) {
-                return;
-            }
-            snapshot = InspectSnapshot.editorPreview();
+            return;
         }
 
         context.pose().pushPose();
@@ -73,7 +69,7 @@ public final class EntityInspectWidget extends AbstractWidget {
     @Override
     public boolean isVisible() {
         return ConfigManager.get().entityInspect.active
-                && (Minecraft.getInstance().crosshairPickEntity != null || isTargetingBlock(Minecraft.getInstance()) || isEditorPreview());
+                && (Minecraft.getInstance().crosshairPickEntity != null || isTargetingBlock(Minecraft.getInstance()));
     }
 
     @Override
@@ -384,10 +380,6 @@ public final class EntityInspectWidget extends AbstractWidget {
                 .trim();
     }
 
-    private boolean isEditorPreview() {
-        return Minecraft.getInstance().screen instanceof HudEditingScreen;
-    }
-
     private boolean isTargetingBlock(Minecraft mc) {
         return mc.hitResult != null && mc.hitResult.getType() == HitResult.Type.BLOCK;
     }
@@ -402,18 +394,6 @@ public final class EntityInspectWidget extends AbstractWidget {
             List<String> matcherLines,
             List<String> nearbyLines
     ) {
-        private static InspectSnapshot editorPreview() {
-            return new InspectSnapshot(
-                    "interaction",
-                    "Debug Preview",
-                    new ItemStack(Items.SPYGLASS),
-                    "interaction",
-                    List.of(SlotInfo.empty("Slot")),
-                    List.of("id: minecraft:note_block", "pos: 0 64 0", "instrument: flute", "note: 21", "powered: false"),
-                    List.of("cluster-golden: true", "empty-armor-stand: true", "bone-displays: 2", "air-displays: 1"),
-                    List.of("interaction [0.00m]", "  name: -", "item_display [0.22m]", "  item: minecraft:paper", "  cmd: 271", "  model: froghelper:golden_crystal", "  name: Golden Crystal")
-            );
-        }
     }
 
     private record SlotInfo(String label, boolean empty, String material, int customModelData, String itemModel, String name) {

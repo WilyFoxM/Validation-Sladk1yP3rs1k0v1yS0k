@@ -61,6 +61,7 @@ final class ProtocolTransport {
 
     private static void reset(ProtocolState state) {
         state.resetRuntimeState();
+        ProtocolGraphTelemetry.getInstance().reset();
 
         if (state.bossRepository != null) {
             state.bossRepository.clearProtocol();

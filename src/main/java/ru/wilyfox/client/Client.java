@@ -48,6 +48,7 @@ import ru.wilyfox.client.hud.widget.OutgoingChatQueueWidget;
 import ru.wilyfox.client.hud.widget.PopUpsWidget;
 import ru.wilyfox.client.hud.widget.PotionRecipeWidget;
 import ru.wilyfox.client.hud.widget.PotionTimersWidget;
+import ru.wilyfox.client.hud.widget.ProtocolGraphWidget;
 import ru.wilyfox.client.hud.widget.ScoreboardWidget;
 import ru.wilyfox.client.hud.widget.SellerCooldownWidget;
 import ru.wilyfox.client.hud.widget.WandCooldownWidget;
@@ -249,7 +250,11 @@ public class Client {
                 ScreenAnchor.BOTTOM_RIGHT
         );
         hudRenderer.registerWidget(
-                new PopUpsWidget(20, 300, HudLayer.CONTENT),
+                new ProtocolGraphWidget(20, 300, HudLayer.CONTENT),
+                ScreenAnchor.BOTTOM_RIGHT
+        );
+        hudRenderer.registerWidget(
+                new PopUpsWidget(20, 340, HudLayer.CONTENT),
                 ScreenAnchor.BOTTOM_RIGHT
         );
         hudRenderer.registerWidget(

@@ -124,6 +124,7 @@ public class ConfigManager {
         if (sanitized.dungeonMap == null) sanitized.dungeonMap = new DungeonMapConfig();
         if (sanitized.entityInspect == null) sanitized.entityInspect = new EntityInspectConfig();
         if (sanitized.outgoingChatQueue == null) sanitized.outgoingChatQueue = new OutgoingChatQueueConfig();
+        if (sanitized.protocolGraphWidget == null) sanitized.protocolGraphWidget = new ProtocolGraphWidgetConfig();
         if (sanitized.levelProgress == null) sanitized.levelProgress = new LevelProgressConfig();
         if (sanitized.popUps == null) sanitized.popUps = new PopUpsConfig();
         if (sanitized.boosters == null) sanitized.boosters = new BoostersConfig();

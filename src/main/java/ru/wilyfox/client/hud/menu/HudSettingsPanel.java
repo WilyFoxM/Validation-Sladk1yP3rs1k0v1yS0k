@@ -1010,6 +1010,14 @@ public class HudSettingsPanel {
         componentsByCategory.get(SettingsCategory.WIDGET).add(
                 new ToggleSettingsComponent(
                         0, 0, 0, 0,
+                        "Show Protocol Graph Widget",
+                        () -> ConfigManager.get().protocolGraphWidget.active,
+                        value -> ConfigManager.get().protocolGraphWidget.active = value
+                )
+        );
+        componentsByCategory.get(SettingsCategory.WIDGET).add(
+                new ToggleSettingsComponent(
+                        0, 0, 0, 0,
                         "Show Level Progress Widget",
                         () -> ConfigManager.get().levelProgress.active,
                         value -> ConfigManager.get().levelProgress.active = value

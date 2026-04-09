@@ -14,6 +14,7 @@ final class ProtocolRouter {
         if (envelope != null) {
             state.diagnostics.onPayloadReceived(envelope.typeId());
             info(LOGGER, "DW protocol: received dw:evoplus payload, bytes={}, typeId={}", length, envelope.typeId());
+            ProtocolGraphTelemetry.getInstance().onPayloadReceived(envelope.typeId(), envelope.body().length);
             ProtocolDebugLogger.logPayloadSampleIfNeeded(state, envelope.typeId(), envelope.body());
         } else {
             info(LOGGER, "DW protocol: received dw:evoplus payload, bytes={}, typeId=<unreadable>", length);
@@ -44,6 +45,7 @@ final class ProtocolRouter {
             case "abilitytypes" -> dispatch(typeId, body, () -> ProtocolPayloadHandlers.handleAbilityTypes(state, body), state);
             case "abilitytimers" -> dispatch(typeId, body, () -> ProtocolPayloadHandlers.handleAbilityTimers(state, body), state);
             case "bossdamage" -> dispatch(typeId, body, () -> ProtocolPayloadHandlers.handleBossDamage(state, body), state);
+            case "bosscollect" -> dispatch(typeId, body, () -> ProtocolPayloadHandlers.handleBossCollect(state, body), state);
             case "levelinfo" -> dispatch(typeId, body, () -> ProtocolPayloadHandlers.handleLevelInfo(state, body), state);
             case "harpooncd" -> dispatch(typeId, body, () -> ProtocolPayloadHandlers.handleHarpoonCooldown(body), state);
             case "marketcd" -> dispatch(typeId, body, () -> ProtocolPayloadHandlers.handleNamedCooldown("marketcd", "Market", body), state);
@@ -62,11 +64,14 @@ final class ProtocolRouter {
 
     private void dispatch(String subchannel, byte[] data, PayloadHandler handler, ProtocolState state) {
         try {
-            if (!handler.handle()) {
+            boolean success = handler.handle();
+            ProtocolGraphTelemetry.getInstance().onRouteHandled(subchannel, success, data.length);
+            if (!success) {
                 state.diagnostics.onDecodeFailure(subchannel, data.length, null);
                 ProtocolDebugLogger.logDecodeFailure(subchannel, data, null);
             }
         } catch (Exception exception) {
+            ProtocolGraphTelemetry.getInstance().onRouteHandled(subchannel, false, data.length);
             state.diagnostics.onDecodeFailure(subchannel, data.length, exception);
             ProtocolDebugLogger.logDecodeFailure(subchannel, data, exception);
             throw exception;
