@@ -10,6 +10,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import ru.wilyfox.bridge.PlayerFishingAccessor;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 public final class AutoFish {
     private static final long REEL_COOLDOWN_MS = 250L;
@@ -24,41 +25,43 @@ public final class AutoFish {
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (!ConfigManager.get().fishing.autoFish) {
-                resetHookState();
-                return;
-            }
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/AutoFish")) {
+                if (!ConfigManager.get().fishing.autoFish) {
+                    resetHookState();
+                    return;
+                }
 
-            if (client.player == null || client.level == null || client.gameMode == null) {
-                resetHookState();
-                return;
-            }
+                if (client.player == null || client.level == null || client.gameMode == null) {
+                    resetHookState();
+                    return;
+                }
 
-            FishingHook hook = getFishingHook(client);
-            if (hook == null || !hook.isAlive()) {
-                resetHookState();
-                return;
-            }
+                FishingHook hook = getFishingHook(client);
+                if (hook == null || !hook.isAlive()) {
+                    resetHookState();
+                    return;
+                }
 
-            if (hook.getId() != currentHookId) {
-                currentHookId = hook.getId();
-                consecutiveTouchTicks = 0;
-                reeledCurrentHook = false;
-            }
+                if (hook.getId() != currentHookId) {
+                    currentHookId = hook.getId();
+                    consecutiveTouchTicks = 0;
+                    reeledCurrentHook = false;
+                }
 
-            if (!isTouchingWaterOrLava(hook)) {
-                consecutiveTouchTicks = 0;
-                return;
-            }
+                if (!isTouchingWaterOrLava(hook)) {
+                    consecutiveTouchTicks = 0;
+                    return;
+                }
 
-            consecutiveTouchTicks++;
-            int requiredTicks = Math.max(1, ConfigManager.get().fishing.autoFishDelayTicks);
-            if (!reeledCurrentHook && consecutiveTouchTicks >= requiredTicks && System.currentTimeMillis() - lastReelAt >= REEL_COOLDOWN_MS) {
-                InteractionHand hand = findRodHand(client);
-                if (hand != null) {
-                    client.gameMode.useItem(client.player, hand);
-                    lastReelAt = System.currentTimeMillis();
-                    reeledCurrentHook = true;
+                consecutiveTouchTicks++;
+                int requiredTicks = Math.max(1, ConfigManager.get().fishing.autoFishDelayTicks);
+                if (!reeledCurrentHook && consecutiveTouchTicks >= requiredTicks && System.currentTimeMillis() - lastReelAt >= REEL_COOLDOWN_MS) {
+                    InteractionHand hand = findRodHand(client);
+                    if (hand != null) {
+                        client.gameMode.useItem(client.player, hand);
+                        lastReelAt = System.currentTimeMillis();
+                        reeledCurrentHook = true;
+                    }
                 }
             }
         });

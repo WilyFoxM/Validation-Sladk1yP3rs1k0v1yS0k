@@ -12,6 +12,7 @@ import ru.wilyfox.client.combo.ComboProgressStore;
 import ru.wilyfox.client.hud.config.ConfigManager;
 import ru.wilyfox.client.hud.config.DiscordRpcConfig;
 import ru.wilyfox.client.level.LevelProgressStore;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.client.protocol.CurrentServerInfo;
 import ru.wilyfox.client.protocol.DiamondWorldProtocolClient;
 import ru.wilyfox.client.protocol.DwGameEvent;
@@ -88,41 +89,43 @@ public final class DiscordRpcService {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            DiscordRpcConfig config = ConfigManager.get().discordRpc;
-            if (!config.active) {
-                PENDING_AUTO_PRESENCE.set(null);
-                if (mode == Mode.AUTO) {
-                    EXECUTOR.execute(DiscordRpcService::stopAutoInternal);
-                } else if (!"Disabled".equals(status)) {
-                    status = "Disabled";
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/DiscordRpcService")) {
+                DiscordRpcConfig config = ConfigManager.get().discordRpc;
+                if (!config.active) {
+                    PENDING_AUTO_PRESENCE.set(null);
+                    if (mode == Mode.AUTO) {
+                        EXECUTOR.execute(DiscordRpcService::stopAutoInternal);
+                    } else if (!"Disabled".equals(status)) {
+                        status = "Disabled";
+                    }
+                    return;
                 }
-                return;
-            }
 
-            if (!shouldRunAuto(client)) {
-                PENDING_AUTO_PRESENCE.set(null);
-                if (mode == Mode.AUTO) {
-                    EXECUTOR.execute(DiscordRpcService::stopAutoInternal);
+                if (!shouldRunAuto(client)) {
+                    PENDING_AUTO_PRESENCE.set(null);
+                    if (mode == Mode.AUTO) {
+                        EXECUTOR.execute(DiscordRpcService::stopAutoInternal);
+                    }
+                    return;
                 }
-                return;
-            }
 
-            long now = System.currentTimeMillis();
-            long intervalMs = Math.max(1L, config.updateIntervalSeconds) * 1000L;
-            if (mode == Mode.AUTO && now - lastAutoUpdateAt < intervalMs) {
-                return;
-            }
-
-            PresenceData presence = buildAutoPresence(client, config);
-            if (presence == null) {
-                PENDING_AUTO_PRESENCE.set(null);
-                if (mode == Mode.AUTO) {
-                    EXECUTOR.execute(DiscordRpcService::stopAutoInternal);
+                long now = System.currentTimeMillis();
+                long intervalMs = Math.max(1L, config.updateIntervalSeconds) * 1000L;
+                if (mode == Mode.AUTO && now - lastAutoUpdateAt < intervalMs) {
+                    return;
                 }
-                return;
-            }
 
-            enqueueAutoPresenceUpdate(presence);
+                PresenceData presence = buildAutoPresence(client, config);
+                if (presence == null) {
+                    PENDING_AUTO_PRESENCE.set(null);
+                    if (mode == Mode.AUTO) {
+                        EXECUTOR.execute(DiscordRpcService::stopAutoInternal);
+                    }
+                    return;
+                }
+
+                enqueueAutoPresenceUpdate(presence);
+            }
         });
     }
 

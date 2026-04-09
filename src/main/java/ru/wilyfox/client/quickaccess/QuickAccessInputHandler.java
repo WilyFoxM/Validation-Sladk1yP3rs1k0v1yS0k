@@ -5,6 +5,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import ru.wilyfox.client.hud.config.ConfigManager;
 import ru.wilyfox.client.keybinds.KeyBinds;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.mixin.KeyMappingAccessorMixin;
 
 public final class QuickAccessInputHandler {
@@ -15,19 +16,21 @@ public final class QuickAccessInputHandler {
     }
 
     private void tick(Minecraft client) {
-        boolean enabled = ConfigManager.get().quickAccess.active;
-        boolean currentlyHeld = enabled && isPhysicallyHeld(client, KeyBinds.QUICK_ACCESS);
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/QuickAccessInputHandler")) {
+            boolean enabled = ConfigManager.get().quickAccess.active;
+            boolean currentlyHeld = enabled && isPhysicallyHeld(client, KeyBinds.QUICK_ACCESS);
 
-        if (currentlyHeld && !quickAccessHeld) {
-            QuickAccessManager.getInstance().open(client);
-        } else if (!currentlyHeld && quickAccessHeld) {
-            QuickAccessManager.getInstance().release(client);
-        }
+            if (currentlyHeld && !quickAccessHeld) {
+                QuickAccessManager.getInstance().open(client);
+            } else if (!currentlyHeld && quickAccessHeld) {
+                QuickAccessManager.getInstance().release(client);
+            }
 
-        quickAccessHeld = currentlyHeld;
+            quickAccessHeld = currentlyHeld;
 
-        if (!enabled && client.screen instanceof QuickAccessScreen) {
-            QuickAccessManager.getInstance().forceClose(client);
+            if (!enabled && client.screen instanceof QuickAccessScreen) {
+                QuickAccessManager.getInstance().forceClose(client);
+            }
         }
     }
 

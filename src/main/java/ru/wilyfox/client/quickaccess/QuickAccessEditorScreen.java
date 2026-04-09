@@ -8,6 +8,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import ru.wilyfox.client.hud.config.ConfigManager;
 import ru.wilyfox.client.hud.widget.WidgetTheme;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 import java.util.List;
 
@@ -67,23 +68,25 @@ public class QuickAccessEditorScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, WidgetTheme.withAlpha(WidgetTheme.PANEL_BG, 0x50));
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("ui/QuickAccessEditorScreen/render")) {
+            graphics.fill(0, 0, this.width, this.height, WidgetTheme.withAlpha(WidgetTheme.PANEL_BG, 0x50));
 
-        panelX = (this.width - PANEL_WIDTH) / 2;
-        panelY = (this.height - PANEL_HEIGHT) / 2;
+            panelX = (this.width - PANEL_WIDTH) / 2;
+            panelY = (this.height - PANEL_HEIGHT) / 2;
 
-        graphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + PANEL_HEIGHT, WidgetTheme.PANEL_BG);
-        graphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + 1, WidgetTheme.ACCENT_LINE);
-        graphics.fill(panelX + LIST_WIDTH, panelY + HEADER_HEIGHT, panelX + LIST_WIDTH + 1, panelY + PANEL_HEIGHT - 8, WidgetTheme.BAR_BG);
+            graphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + PANEL_HEIGHT, WidgetTheme.PANEL_BG);
+            graphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + 1, WidgetTheme.ACCENT_LINE);
+            graphics.fill(panelX + LIST_WIDTH, panelY + HEADER_HEIGHT, panelX + LIST_WIDTH + 1, panelY + PANEL_HEIGHT - 8, WidgetTheme.BAR_BG);
 
-        graphics.drawString(this.font, "Quick Access", panelX + 10, panelY + 8, WidgetTheme.TITLE);
-        graphics.drawString(this.font, "Editor", panelX + 92, panelY + 8, WidgetTheme.TEXT_SECONDARY);
+            graphics.drawString(this.font, "Quick Access", panelX + 10, panelY + 8, WidgetTheme.TITLE);
+            graphics.drawString(this.font, "Editor", panelX + 92, panelY + 8, WidgetTheme.TEXT_SECONDARY);
 
-        renderSelectionList(graphics, mouseX, mouseY);
+            renderSelectionList(graphics, mouseX, mouseY);
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+            super.render(graphics, mouseX, mouseY, partialTick);
 
-        renderEditorLabels(graphics);
+            renderEditorLabels(graphics);
+        }
     }
 
     @Override

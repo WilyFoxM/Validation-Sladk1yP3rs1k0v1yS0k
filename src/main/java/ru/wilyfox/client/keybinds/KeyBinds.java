@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
 import org.lwjgl.glfw.GLFW;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 public final class KeyBinds {
     public static final String CATEGORY = "FrogHelper";
@@ -94,16 +95,18 @@ public final class KeyBinds {
     }
 
     private static void handleCommandKeybinds(Minecraft client) {
-        if (client.player == null || client.player.connection == null) {
-            return;
-        }
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/KeyBinds")) {
+            if (client.player == null || client.player.connection == null) {
+                return;
+            }
 
-        while (CLAN_HIDE.consumeClick()) {
-            client.player.connection.sendCommand("clanhide");
-        }
+            while (CLAN_HIDE.consumeClick()) {
+                client.player.connection.sendCommand("clanhide");
+            }
 
-        while (RUNES_BAG.consumeClick()) {
-            client.player.connection.sendCommand("runesbag");
+            while (RUNES_BAG.consumeClick()) {
+                client.player.connection.sendCommand("runesbag");
+            }
         }
     }
 }

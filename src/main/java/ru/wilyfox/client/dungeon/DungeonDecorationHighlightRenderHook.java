@@ -17,6 +17,7 @@ import net.minecraft.world.item.component.CustomModelData;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.client.protocol.DiamondWorldProtocolClient;
 
 public final class DungeonDecorationHighlightRenderHook {
@@ -35,45 +36,47 @@ public final class DungeonDecorationHighlightRenderHook {
     }
 
     private static void onAfterEntities(WorldRenderContext context) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null || context.matrixStack() == null) {
-            return;
-        }
-
-        if (!ConfigManager.get().render.dungeonDecorationHighlight) {
-            return;
-        }
-
-        if (!DiamondWorldProtocolClient.isDungeonLocation()) {
-            return;
-        }
-
-        Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
-        MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
-        VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.lines());
-        PoseStack poseStack = context.matrixStack();
-
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof Display.ItemDisplay itemDisplay)) {
-                continue;
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("render/DungeonDecorationHighlightRenderHook")) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level == null || mc.player == null || context.matrixStack() == null) {
+                return;
             }
 
-            if (!shouldHighlight(itemDisplay)) {
-                continue;
+            if (!ConfigManager.get().render.dungeonDecorationHighlight) {
+                return;
             }
 
-            Vec3 position = itemDisplay.position();
-            AABB box = AABB.ofSize(
-                            new Vec3(position.x, position.y + BOX_HEIGHT * 0.5D, position.z),
-                            BOX_WIDTH,
-                            BOX_HEIGHT,
-                            BOX_WIDTH
-                    )
-                    .move(-cameraPos.x, -cameraPos.y, -cameraPos.z);
-            ShapeRenderer.renderLineBox(poseStack, vertexConsumer, box, RED, GREEN, BLUE, ALPHA);
-        }
+            if (!DiamondWorldProtocolClient.isDungeonLocation()) {
+                return;
+            }
 
-        bufferSource.endBatch(RenderType.lines());
+            Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
+            MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
+            VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.lines());
+            PoseStack poseStack = context.matrixStack();
+
+            for (Entity entity : mc.level.entitiesForRendering()) {
+                if (!(entity instanceof Display.ItemDisplay itemDisplay)) {
+                    continue;
+                }
+
+                if (!shouldHighlight(itemDisplay)) {
+                    continue;
+                }
+
+                Vec3 position = itemDisplay.position();
+                AABB box = AABB.ofSize(
+                                new Vec3(position.x, position.y + BOX_HEIGHT * 0.5D, position.z),
+                                BOX_WIDTH,
+                                BOX_HEIGHT,
+                                BOX_WIDTH
+                        )
+                        .move(-cameraPos.x, -cameraPos.y, -cameraPos.z);
+                ShapeRenderer.renderLineBox(poseStack, vertexConsumer, box, RED, GREEN, BLUE, ALPHA);
+            }
+
+            bufferSource.endBatch(RenderType.lines());
+        }
     }
 
     private static boolean shouldHighlight(Display.ItemDisplay itemDisplay) {

@@ -11,6 +11,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import ru.wilyfox.client.keybinds.KeyBinds;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.utils.Formatting;
 import org.lwjgl.glfw.GLFW;
 
@@ -29,26 +30,28 @@ public final class RuneSetSwitcher {
     }
 
     public static boolean handleScreenKeyPressed(Component title, AbstractContainerMenu menu, int keyCode, int scanCode) {
-        if (!RuneSetEffectOverlay.isRuneBagScreen(title)) {
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("ui/RuneSetSwitcher/handleScreenKeyPressed")) {
+            if (!RuneSetEffectOverlay.isRuneBagScreen(title)) {
+                return false;
+            }
+
+            int directIndex = matchDirectSelection(keyCode, scanCode);
+            if (directIndex >= 0) {
+                return switchToSet(Minecraft.getInstance(), menu, directIndex);
+            }
+
+            Minecraft client = Minecraft.getInstance();
+
+            if (matches(client.options.keyLeft, keyCode, scanCode)) {
+                return moveSelection(Minecraft.getInstance(), menu, -1);
+            }
+
+            if (matches(client.options.keyRight, keyCode, scanCode)) {
+                return moveSelection(Minecraft.getInstance(), menu, 1);
+            }
+
             return false;
         }
-
-        int directIndex = matchDirectSelection(keyCode, scanCode);
-        if (directIndex >= 0) {
-            return switchToSet(Minecraft.getInstance(), menu, directIndex);
-        }
-
-        Minecraft client = Minecraft.getInstance();
-
-        if (matches(client.options.keyLeft, keyCode, scanCode)) {
-            return moveSelection(Minecraft.getInstance(), menu, -1);
-        }
-
-        if (matches(client.options.keyRight, keyCode, scanCode)) {
-            return moveSelection(Minecraft.getInstance(), menu, 1);
-        }
-
-        return false;
     }
 
     private static boolean matches(KeyMapping mapping, int keyCode, int scanCode) {

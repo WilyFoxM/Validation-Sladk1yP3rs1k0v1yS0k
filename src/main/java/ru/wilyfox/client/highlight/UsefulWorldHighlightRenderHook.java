@@ -35,6 +35,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.client.protocol.CurrentServerInfo;
 import ru.wilyfox.client.protocol.DiamondWorldProtocolClient;
 import ru.wilyfox.utils.Formatting;
@@ -49,11 +50,16 @@ import java.util.Map;
 import java.util.Set;
 
 public final class UsefulWorldHighlightRenderHook {
+    private static final String PROFILER_PREFIX = "render/UsefulWorldHighlightRenderHook";
     private static final int GOLDEN_CRYSTAL_MODEL_ID = 271;
     private static final int ENTITY_SCAN_INTERVAL_TICKS = 10;
     private static final int BLOCK_SCAN_REFRESH_TICKS = 100;
     private static final int DIRTY_CHUNK_RESCAN_LIMIT = 2;
-    private static final int CHUNK_SCAN_BUDGET_PER_FRAME = 3;
+    private static final int DIRTY_LOCAL_RESCAN_RADIUS = 1;
+    private static final int DIRTY_FULL_RESCAN_THRESHOLD = 6;
+    private static final int MIN_CHUNK_SCAN_BUDGET_PER_FRAME = 1;
+    private static final int MAX_CHUNK_SCAN_BUDGET_PER_FRAME = 3;
+    private static final long TARGET_CHUNK_SCAN_BUDGET_NANOS = 4_000_000L;
     private static final long DIRTY_CHUNK_MARK_COOLDOWN_MS = 500L;
     private static final int HORIZONTAL_SCAN_RADIUS = 32;
     private static final int VERTICAL_SCAN_RADIUS = 20;
@@ -88,9 +94,11 @@ public final class UsefulWorldHighlightRenderHook {
     private static final Map<Long, ChunkScanResult> BLOCK_CHUNK_CACHE = new HashMap<>();
     private static final Map<Long, Long> DIRTY_CHUNK_MARK_TIMES = new HashMap<>();
     private static final Set<Long> DIRTY_CHUNK_KEYS = new HashSet<>();
+    private static final Map<Long, Set<Long>> DIRTY_BLOCK_POSITIONS = new HashMap<>();
     private static final LinkedHashSet<Long> PENDING_BLOCK_SCAN_KEYS = new LinkedHashSet<>();
     private static long lastEntityScanTick = Long.MIN_VALUE;
     private static long lastBlockRefreshTick = Long.MIN_VALUE;
+    private static long averageChunkScanNanos = 10_000_000L;
     private static int lastMinChunkX = Integer.MIN_VALUE;
     private static int lastMaxChunkX = Integer.MIN_VALUE;
     private static int lastMinChunkZ = Integer.MIN_VALUE;
@@ -104,264 +112,390 @@ public final class UsefulWorldHighlightRenderHook {
     }
 
     public static void markBlockDirty(BlockPos blockPos) {
-        if (blockPos == null) {
-            return;
-        }
+        try (ModProfiler.Scope ignored = profile("dirtyMark")) {
+            if (blockPos == null) {
+                count("dirtyMark/skippedNull");
+                return;
+            }
 
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) {
-            return;
-        }
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level == null || mc.player == null) {
+                count("dirtyMark/skippedNoWorld");
+                return;
+            }
 
-        if (!ConfigManager.get().render.usefulItemsHighlight || !isMineHighlightLocation()) {
-            return;
-        }
+            if (!ConfigManager.get().render.usefulItemsHighlight || !isMineHighlightLocation()) {
+                count("dirtyMark/skippedDisabled");
+                return;
+            }
 
-        long chunkKey = ChunkPos.asLong(SectionPos.blockToSectionCoord(blockPos.getX()), SectionPos.blockToSectionCoord(blockPos.getZ()));
-        long now = System.currentTimeMillis();
-        Long lastMarkedAt = DIRTY_CHUNK_MARK_TIMES.get(chunkKey);
-        if (lastMarkedAt != null && now - lastMarkedAt < DIRTY_CHUNK_MARK_COOLDOWN_MS) {
-            return;
-        }
+            long chunkKey = ChunkPos.asLong(SectionPos.blockToSectionCoord(blockPos.getX()), SectionPos.blockToSectionCoord(blockPos.getZ()));
+            DIRTY_CHUNK_KEYS.add(chunkKey);
+            Set<Long> dirtyPositions = DIRTY_BLOCK_POSITIONS.computeIfAbsent(chunkKey, unused -> new LinkedHashSet<>());
+            boolean added = dirtyPositions.add(blockPos.asLong());
+            count(added ? "dirtyMark/accepted" : "dirtyMark/duplicate");
+            count("dirtyMark/chunkDirtyPositions", dirtyPositions.size());
+            long now = System.currentTimeMillis();
+            Long lastMarkedAt = DIRTY_CHUNK_MARK_TIMES.get(chunkKey);
+            if (lastMarkedAt != null && now - lastMarkedAt < DIRTY_CHUNK_MARK_COOLDOWN_MS) {
+                count("dirtyMark/fullScanThrottleWindow");
+                return;
+            }
 
-        DIRTY_CHUNK_MARK_TIMES.put(chunkKey, now);
-        DIRTY_CHUNK_KEYS.add(chunkKey);
+            DIRTY_CHUNK_MARK_TIMES.put(chunkKey, now);
+        }
     }
 
     private static void onAfterEntities(WorldRenderContext context) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null || context.matrixStack() == null || context.consumers() == null) {
-            clearCache();
-            return;
-        }
+        try (ModProfiler.Scope ignored = profile("frame")) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level == null || mc.player == null || context.matrixStack() == null || context.consumers() == null) {
+                count("frame/skippedNoContext");
+                clearCache();
+                return;
+            }
 
-        if (!ConfigManager.get().render.usefulItemsHighlight) {
-            clearCache();
-            return;
-        }
+            if (!ConfigManager.get().render.usefulItemsHighlight) {
+                count("frame/skippedDisabled");
+                clearCache();
+                return;
+            }
 
-        refreshCacheIfNeeded(mc);
-        if (CACHED_BOXES.isEmpty()) {
-            return;
-        }
+            refreshCacheIfNeeded(mc);
+            if (CACHED_BOXES.isEmpty()) {
+                count("frame/skippedEmptyBoxes");
+                return;
+            }
 
-        Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
-        PoseStack poseStack = context.matrixStack();
-        VertexConsumer lineConsumer = context.consumers().getBuffer(USEFUL_HIGHLIGHT_NO_DEPTH);
+            Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
+            PoseStack poseStack = context.matrixStack();
+            VertexConsumer lineConsumer = context.consumers().getBuffer(USEFUL_HIGHLIGHT_NO_DEPTH);
 
-        for (ColoredBox coloredBox : CACHED_BOXES) {
-            ShapeRenderer.renderLineBox(
-                    poseStack,
-                    lineConsumer,
-                    coloredBox.box.move(-cameraPos.x, -cameraPos.y, -cameraPos.z),
-                    coloredBox.red,
-                    coloredBox.green,
-                    coloredBox.blue,
-                    LINE_ALPHA
-            );
+            count("frame/cachedBoxes", CACHED_BOXES.size());
+            try (ModProfiler.Scope drawScope = profile("drawBoxes")) {
+                for (ColoredBox coloredBox : CACHED_BOXES) {
+                    ShapeRenderer.renderLineBox(
+                            poseStack,
+                            lineConsumer,
+                            coloredBox.box.move(-cameraPos.x, -cameraPos.y, -cameraPos.z),
+                            coloredBox.red,
+                            coloredBox.green,
+                            coloredBox.blue,
+                            LINE_ALPHA
+                    );
+                }
+            }
         }
     }
 
     private static void refreshCacheIfNeeded(Minecraft mc) {
-        refreshBlockCacheIfNeeded(mc);
-        refreshEntityCacheIfNeeded(mc);
+        try (ModProfiler.Scope ignored = profile("refreshCache")) {
+            refreshBlockCacheIfNeeded(mc);
+            refreshEntityCacheIfNeeded(mc);
 
-        CACHED_BOXES.clear();
-        CACHED_BOXES.addAll(BLOCK_BOXES);
-        CACHED_BOXES.addAll(ENTITY_BOXES);
+            try (ModProfiler.Scope mergeScope = profile("refreshCache/merge")) {
+                CACHED_BOXES.clear();
+                CACHED_BOXES.addAll(BLOCK_BOXES);
+                CACHED_BOXES.addAll(ENTITY_BOXES);
+                count("refreshCache/blockBoxes", BLOCK_BOXES.size());
+                count("refreshCache/entityBoxes", ENTITY_BOXES.size());
+                count("refreshCache/mergedBoxes", CACHED_BOXES.size());
+            }
+        }
     }
 
     private static void refreshBlockCacheIfNeeded(Minecraft mc) {
-        if (!isMineHighlightLocation()) {
-            BLOCK_BOXES.clear();
-            BLOCK_CHUNK_CACHE.clear();
-            DIRTY_CHUNK_MARK_TIMES.clear();
-            DIRTY_CHUNK_KEYS.clear();
-            PENDING_BLOCK_SCAN_KEYS.clear();
-            lastBlockRefreshTick = mc.level.getGameTime();
-            return;
-        }
+        try (ModProfiler.Scope ignored = profile("refreshBlockCache")) {
+            if (!isMineHighlightLocation()) {
+                count("refreshBlockCache/skippedNotMine");
+                BLOCK_BOXES.clear();
+                BLOCK_CHUNK_CACHE.clear();
+                DIRTY_CHUNK_MARK_TIMES.clear();
+                DIRTY_CHUNK_KEYS.clear();
+                DIRTY_BLOCK_POSITIONS.clear();
+                PENDING_BLOCK_SCAN_KEYS.clear();
+                lastBlockRefreshTick = mc.level.getGameTime();
+                return;
+            }
 
-        long gameTime = mc.level.getGameTime();
-        BlockPos playerPos = mc.player.blockPosition();
-        int minChunkX = SectionPos.blockToSectionCoord(playerPos.getX() - HORIZONTAL_SCAN_RADIUS);
-        int maxChunkX = SectionPos.blockToSectionCoord(playerPos.getX() + HORIZONTAL_SCAN_RADIUS);
-        int minChunkZ = SectionPos.blockToSectionCoord(playerPos.getZ() - HORIZONTAL_SCAN_RADIUS);
-        int maxChunkZ = SectionPos.blockToSectionCoord(playerPos.getZ() + HORIZONTAL_SCAN_RADIUS);
+            long gameTime = mc.level.getGameTime();
+            BlockPos playerPos = mc.player.blockPosition();
+            int minChunkX = SectionPos.blockToSectionCoord(playerPos.getX() - HORIZONTAL_SCAN_RADIUS);
+            int maxChunkX = SectionPos.blockToSectionCoord(playerPos.getX() + HORIZONTAL_SCAN_RADIUS);
+            int minChunkZ = SectionPos.blockToSectionCoord(playerPos.getZ() - HORIZONTAL_SCAN_RADIUS);
+            int maxChunkZ = SectionPos.blockToSectionCoord(playerPos.getZ() + HORIZONTAL_SCAN_RADIUS);
+            int chunkWindowSize = (maxChunkX - minChunkX + 1) * (maxChunkZ - minChunkZ + 1);
+            count("refreshBlockCache/chunkWindowSize", chunkWindowSize);
 
-        boolean chunkWindowChanged = minChunkX != lastMinChunkX
-                || maxChunkX != lastMaxChunkX
-                || minChunkZ != lastMinChunkZ
-                || maxChunkZ != lastMaxChunkZ;
-        boolean refreshExpired = gameTime - lastBlockRefreshTick >= BLOCK_SCAN_REFRESH_TICKS;
-        if (!chunkWindowChanged && !refreshExpired && !BLOCK_BOXES.isEmpty()) {
-            processDirtyChunks(mc, minChunkX, maxChunkX, minChunkZ, maxChunkZ);
-            return;
-        }
+            boolean chunkWindowChanged = minChunkX != lastMinChunkX
+                    || maxChunkX != lastMaxChunkX
+                    || minChunkZ != lastMinChunkZ
+                    || maxChunkZ != lastMaxChunkZ;
+            boolean refreshExpired = gameTime - lastBlockRefreshTick >= BLOCK_SCAN_REFRESH_TICKS;
+            if (!chunkWindowChanged && !refreshExpired && !BLOCK_BOXES.isEmpty()) {
+                count("refreshBlockCache/fastPathHits");
+                processDirtyChunks(mc, minChunkX, maxChunkX, minChunkZ, maxChunkZ);
+                return;
+            }
 
-        lastBlockRefreshTick = gameTime;
-        lastMinChunkX = minChunkX;
-        lastMaxChunkX = maxChunkX;
-        lastMinChunkZ = minChunkZ;
-        lastMaxChunkZ = maxChunkZ;
+            count(chunkWindowChanged ? "refreshBlockCache/windowChanged" : "refreshBlockCache/windowStable");
+            count(refreshExpired ? "refreshBlockCache/refreshExpired" : "refreshBlockCache/refreshFresh");
 
-        Set<Long> activeChunkKeys = new HashSet<>();
-        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
-            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-                long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
-                activeChunkKeys.add(chunkKey);
-                ChunkScanResult cached = BLOCK_CHUNK_CACHE.get(chunkKey);
-                if (cached == null || refreshExpired || chunkWindowChanged) {
-                    PENDING_BLOCK_SCAN_KEYS.add(chunkKey);
+            lastBlockRefreshTick = gameTime;
+            lastMinChunkX = minChunkX;
+            lastMaxChunkX = maxChunkX;
+            lastMinChunkZ = minChunkZ;
+            lastMaxChunkZ = maxChunkZ;
+
+            Set<Long> activeChunkKeys = new HashSet<>();
+            int newlyQueuedChunks = 0;
+            try (ModProfiler.Scope buildWindowScope = profile("refreshBlockCache/buildWindow")) {
+                for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+                    for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                        long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
+                        activeChunkKeys.add(chunkKey);
+                        ChunkScanResult cached = BLOCK_CHUNK_CACHE.get(chunkKey);
+                        if (cached == null || refreshExpired || chunkWindowChanged) {
+                            if (PENDING_BLOCK_SCAN_KEYS.add(chunkKey)) {
+                                newlyQueuedChunks++;
+                            }
+                        }
+                    }
                 }
             }
+            count("refreshBlockCache/activeChunkKeys", activeChunkKeys.size());
+            count("refreshBlockCache/newlyQueuedChunks", newlyQueuedChunks);
+
+            try (ModProfiler.Scope pruneScope = profile("refreshBlockCache/pruneCaches")) {
+                BLOCK_CHUNK_CACHE.keySet().removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
+                DIRTY_CHUNK_MARK_TIMES.keySet().removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
+                DIRTY_BLOCK_POSITIONS.keySet().removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
+                PENDING_BLOCK_SCAN_KEYS.removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
+            }
+
+            count("refreshBlockCache/cacheChunksAfterPrune", BLOCK_CHUNK_CACHE.size());
+            count("refreshBlockCache/pendingChunksAfterPrune", PENDING_BLOCK_SCAN_KEYS.size());
+            processPendingChunkScans(mc);
+            rebuildBlockBoxes();
+            processDirtyChunks(mc, minChunkX, maxChunkX, minChunkZ, maxChunkZ);
         }
-
-        BLOCK_CHUNK_CACHE.keySet().removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
-        DIRTY_CHUNK_MARK_TIMES.keySet().removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
-        PENDING_BLOCK_SCAN_KEYS.removeIf(chunkKey -> !activeChunkKeys.contains(chunkKey));
-
-        processPendingChunkScans(mc);
-        rebuildBlockBoxes();
-
-        processDirtyChunks(mc, minChunkX, maxChunkX, minChunkZ, maxChunkZ);
     }
 
     private static ChunkScanResult scanChunk(Minecraft mc, LevelChunk chunk) {
-        List<ColoredBox> boxes = new ArrayList<>();
-        BlockPos playerPos = mc.player.blockPosition();
-        int worldMinY = mc.level.dimensionType().minY();
-        int worldMaxY = worldMinY + mc.level.dimensionType().height() - 1;
-        int minY = Math.max(worldMinY, playerPos.getY() - VERTICAL_SCAN_RADIUS);
-        int maxY = Math.min(worldMaxY, playerPos.getY() + VERTICAL_SCAN_RADIUS);
-        ChunkPos chunkPos = chunk.getPos();
-        int minX = Math.max(chunkPos.getMinBlockX(), playerPos.getX() - HORIZONTAL_SCAN_RADIUS);
-        int maxX = Math.min(chunkPos.getMaxBlockX(), playerPos.getX() + HORIZONTAL_SCAN_RADIUS);
-        int minZ = Math.max(chunkPos.getMinBlockZ(), playerPos.getZ() - HORIZONTAL_SCAN_RADIUS);
-        int maxZ = Math.min(chunkPos.getMaxBlockZ(), playerPos.getZ() + HORIZONTAL_SCAN_RADIUS);
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int y = minY; y <= maxY; y++) {
-            for (int x = minX; x <= maxX; x++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    cursor.set(x, y, z);
-                    BlockState blockState = chunk.getBlockState(cursor);
-                    HighlightBlockType blockType = HighlightBlockType.from(blockState, chunk.getBlockEntity(cursor));
-                    if (blockType == null) {
-                        continue;
-                    }
+        try (ModProfiler.Scope ignored = profile("scanChunk")) {
+            long scanStartedAt = System.nanoTime();
+            Map<Long, ColoredBox> boxesByBlockPos = new HashMap<>();
+            BlockPos playerPos = mc.player.blockPosition();
+            int worldMinY = mc.level.dimensionType().minY();
+            int worldMaxY = worldMinY + mc.level.dimensionType().height() - 1;
+            int minY = Math.max(worldMinY, playerPos.getY() - VERTICAL_SCAN_RADIUS);
+            int maxY = Math.min(worldMaxY, playerPos.getY() + VERTICAL_SCAN_RADIUS);
+            ChunkPos chunkPos = chunk.getPos();
+            int minX = Math.max(chunkPos.getMinBlockX(), playerPos.getX() - HORIZONTAL_SCAN_RADIUS);
+            int maxX = Math.min(chunkPos.getMaxBlockX(), playerPos.getX() + HORIZONTAL_SCAN_RADIUS);
+            int minZ = Math.max(chunkPos.getMinBlockZ(), playerPos.getZ() - HORIZONTAL_SCAN_RADIUS);
+            int maxZ = Math.min(chunkPos.getMaxBlockZ(), playerPos.getZ() + HORIZONTAL_SCAN_RADIUS);
+            int visitedBlocks = 0;
+            int highlightedBlocks = 0;
+            count("scanChunk/ySpan", maxY - minY + 1);
+            count("scanChunk/xSpan", maxX - minX + 1);
+            count("scanChunk/zSpan", maxZ - minZ + 1);
 
-                    boxes.add(new ColoredBox(blockType.createBox(cursor, blockState), blockType.red, blockType.green, blockType.blue));
+            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+            try (ModProfiler.Scope iterateScope = profile("scanChunk/iterateBlocks")) {
+                for (int y = minY; y <= maxY; y++) {
+                    for (int x = minX; x <= maxX; x++) {
+                        for (int z = minZ; z <= maxZ; z++) {
+                            visitedBlocks++;
+                            cursor.set(x, y, z);
+                            BlockState blockState = chunk.getBlockState(cursor);
+                            if (!HighlightBlockType.canMatch(blockState)) {
+                                continue;
+                            }
+
+                            HighlightBlockType blockType = HighlightBlockType.from(blockState, chunk.getBlockEntity(cursor));
+                            if (blockType == null) {
+                                continue;
+                            }
+
+                            highlightedBlocks++;
+                            boxesByBlockPos.put(cursor.asLong(), new ColoredBox(blockType.createBox(cursor, blockState), blockType.red, blockType.green, blockType.blue));
+                        }
+                    }
                 }
             }
+            count("scanChunk/visitedBlocks", visitedBlocks);
+            count("scanChunk/highlightedBlocks", highlightedBlocks);
+            count("scanChunk/outputBoxes", boxesByBlockPos.size());
+            recordChunkScanSample(System.nanoTime() - scanStartedAt);
+            return new ChunkScanResult(boxesByBlockPos);
         }
-
-        return new ChunkScanResult(boxes);
     }
 
     private static void processDirtyChunks(Minecraft mc, int minChunkX, int maxChunkX, int minChunkZ, int maxChunkZ) {
-        if (DIRTY_CHUNK_KEYS.isEmpty()) {
-            return;
-        }
-
-        List<Long> rescannedChunkKeys = new ArrayList<>();
-        int rescanned = 0;
-        for (long chunkKey : new ArrayList<>(DIRTY_CHUNK_KEYS)) {
-            int chunkX = ChunkPos.getX(chunkKey);
-            int chunkZ = ChunkPos.getZ(chunkKey);
-            if (chunkX < minChunkX || chunkX > maxChunkX || chunkZ < minChunkZ || chunkZ > maxChunkZ) {
-                rescannedChunkKeys.add(chunkKey);
-                continue;
+        try (ModProfiler.Scope ignored = profile("processDirtyChunks")) {
+            if (DIRTY_CHUNK_KEYS.isEmpty()) {
+                count("processDirtyChunks/skippedEmpty");
+                return;
             }
 
-            LevelChunk chunk = mc.level.getChunkSource().getChunkNow(chunkX, chunkZ);
-            if (chunk == null) {
-                rescannedChunkKeys.add(chunkKey);
-                continue;
+            count("processDirtyChunks/dirtyQueueSize", DIRTY_CHUNK_KEYS.size());
+            List<Long> rescannedChunkKeys = new ArrayList<>();
+            int rescanned = 0;
+            int skippedOutOfWindow = 0;
+            int skippedMissingChunk = 0;
+            int locallyPatched = 0;
+            int escalatedFullScan = 0;
+            try (ModProfiler.Scope iterateScope = profile("processDirtyChunks/iterate")) {
+                for (long chunkKey : new ArrayList<>(DIRTY_CHUNK_KEYS)) {
+                    int chunkX = ChunkPos.getX(chunkKey);
+                    int chunkZ = ChunkPos.getZ(chunkKey);
+                    if (chunkX < minChunkX || chunkX > maxChunkX || chunkZ < minChunkZ || chunkZ > maxChunkZ) {
+                        skippedOutOfWindow++;
+                        rescannedChunkKeys.add(chunkKey);
+                        continue;
+                    }
+
+                    LevelChunk chunk = mc.level.getChunkSource().getChunkNow(chunkX, chunkZ);
+                    if (chunk == null) {
+                        skippedMissingChunk++;
+                        rescannedChunkKeys.add(chunkKey);
+                        continue;
+                    }
+
+                    Set<Long> dirtyPositions = DIRTY_BLOCK_POSITIONS.getOrDefault(chunkKey, Set.of());
+                    if (shouldDoFullDirtyRescan(dirtyPositions)) {
+                        BLOCK_CHUNK_CACHE.put(chunkKey, scanChunk(mc, chunk));
+                        escalatedFullScan++;
+                    } else {
+                        BLOCK_CHUNK_CACHE.put(chunkKey, rescanDirtyPositions(mc, chunk, dirtyPositions));
+                        locallyPatched++;
+                    }
+
+                    rescannedChunkKeys.add(chunkKey);
+                    rescanned++;
+                    if (rescanned >= DIRTY_CHUNK_RESCAN_LIMIT) {
+                        break;
+                    }
+                }
             }
 
-            BLOCK_CHUNK_CACHE.put(chunkKey, scanChunk(mc, chunk));
-            rescannedChunkKeys.add(chunkKey);
-            rescanned++;
-            if (rescanned >= DIRTY_CHUNK_RESCAN_LIMIT) {
-                break;
+            count("processDirtyChunks/rescanned", rescanned);
+            count("processDirtyChunks/skippedOutOfWindow", skippedOutOfWindow);
+            count("processDirtyChunks/skippedMissingChunk", skippedMissingChunk);
+            count("processDirtyChunks/locallyPatched", locallyPatched);
+            count("processDirtyChunks/escalatedFullScan", escalatedFullScan);
+            count("processDirtyChunks/completedKeys", rescannedChunkKeys.size());
+            if (rescannedChunkKeys.isEmpty()) {
+                return;
             }
-        }
 
-        if (rescannedChunkKeys.isEmpty()) {
-            return;
+            DIRTY_CHUNK_KEYS.removeAll(rescannedChunkKeys);
+            DIRTY_BLOCK_POSITIONS.keySet().removeIf(rescannedChunkKeys::contains);
+            rebuildBlockBoxes();
         }
-
-        DIRTY_CHUNK_KEYS.removeAll(rescannedChunkKeys);
-        rebuildBlockBoxes();
     }
 
     private static void processPendingChunkScans(Minecraft mc) {
-        if (PENDING_BLOCK_SCAN_KEYS.isEmpty()) {
-            return;
-        }
-
-        int scanned = 0;
-        List<Long> completedChunkKeys = new ArrayList<>();
-        for (long chunkKey : PENDING_BLOCK_SCAN_KEYS) {
-            int chunkX = ChunkPos.getX(chunkKey);
-            int chunkZ = ChunkPos.getZ(chunkKey);
-            LevelChunk chunk = mc.level.getChunkSource().getChunkNow(chunkX, chunkZ);
-            if (chunk == null) {
-                BLOCK_CHUNK_CACHE.remove(chunkKey);
-                completedChunkKeys.add(chunkKey);
-                continue;
+        try (ModProfiler.Scope ignored = profile("processPendingChunkScans")) {
+            if (PENDING_BLOCK_SCAN_KEYS.isEmpty()) {
+                count("processPendingChunkScans/skippedEmpty");
+                return;
             }
 
-            BLOCK_CHUNK_CACHE.put(chunkKey, scanChunk(mc, chunk));
-            completedChunkKeys.add(chunkKey);
-            scanned++;
-            if (scanned >= CHUNK_SCAN_BUDGET_PER_FRAME) {
-                break;
-            }
-        }
+            count("processPendingChunkScans/pendingQueueSize", PENDING_BLOCK_SCAN_KEYS.size());
+            int scanned = 0;
+            int missingChunks = 0;
+            int scanBudget = chunkScanBudgetPerFrame();
+            List<Long> completedChunkKeys = new ArrayList<>();
+            try (ModProfiler.Scope iterateScope = profile("processPendingChunkScans/iterate")) {
+                for (long chunkKey : PENDING_BLOCK_SCAN_KEYS) {
+                    int chunkX = ChunkPos.getX(chunkKey);
+                    int chunkZ = ChunkPos.getZ(chunkKey);
+                    LevelChunk chunk = mc.level.getChunkSource().getChunkNow(chunkX, chunkZ);
+                    if (chunk == null) {
+                        missingChunks++;
+                        BLOCK_CHUNK_CACHE.remove(chunkKey);
+                        completedChunkKeys.add(chunkKey);
+                        continue;
+                    }
 
-        if (!completedChunkKeys.isEmpty()) {
-            PENDING_BLOCK_SCAN_KEYS.removeAll(completedChunkKeys);
+                    BLOCK_CHUNK_CACHE.put(chunkKey, scanChunk(mc, chunk));
+                    completedChunkKeys.add(chunkKey);
+                    scanned++;
+                    if (scanned >= scanBudget) {
+                        break;
+                    }
+                }
+            }
+
+            count("processPendingChunkScans/scanBudget", scanBudget);
+            count("processPendingChunkScans/scanned", scanned);
+            count("processPendingChunkScans/missingChunks", missingChunks);
+            count("processPendingChunkScans/completed", completedChunkKeys.size());
+            if (!completedChunkKeys.isEmpty()) {
+                PENDING_BLOCK_SCAN_KEYS.removeAll(completedChunkKeys);
+            }
         }
     }
 
     private static void rebuildBlockBoxes() {
-        BLOCK_BOXES.clear();
-        for (ChunkScanResult result : BLOCK_CHUNK_CACHE.values()) {
-            BLOCK_BOXES.addAll(result.boxes);
+        try (ModProfiler.Scope ignored = profile("rebuildBlockBoxes")) {
+            BLOCK_BOXES.clear();
+            int cacheEntries = 0;
+            for (ChunkScanResult result : BLOCK_CHUNK_CACHE.values()) {
+                cacheEntries++;
+                BLOCK_BOXES.addAll(result.boxesByBlockPos.values());
+            }
+            count("rebuildBlockBoxes/cacheEntries", cacheEntries);
+            count("rebuildBlockBoxes/outputBoxes", BLOCK_BOXES.size());
         }
     }
 
     private static void refreshEntityCacheIfNeeded(Minecraft mc) {
-        long gameTime = mc.level.getGameTime();
-        if (gameTime == lastEntityScanTick) {
-            return;
-        }
+        try (ModProfiler.Scope ignored = profile("refreshEntityCache")) {
+            long gameTime = mc.level.getGameTime();
+            if (gameTime == lastEntityScanTick) {
+                count("refreshEntityCache/skippedSameTick");
+                return;
+            }
 
-        if (gameTime - lastEntityScanTick < ENTITY_SCAN_INTERVAL_TICKS && !ENTITY_BOXES.isEmpty()) {
-            return;
-        }
+            if (gameTime - lastEntityScanTick < ENTITY_SCAN_INTERVAL_TICKS && !ENTITY_BOXES.isEmpty()) {
+                count("refreshEntityCache/skippedInterval");
+                return;
+            }
 
-        lastEntityScanTick = gameTime;
-        ENTITY_BOXES.clear();
-        collectNearbyEntities(mc);
+            lastEntityScanTick = gameTime;
+            ENTITY_BOXES.clear();
+            collectNearbyEntities(mc);
+            count("refreshEntityCache/outputBoxes", ENTITY_BOXES.size());
+        }
     }
 
     private static void collectNearbyEntities(Minecraft mc) {
-        AABB searchBox = mc.player.getBoundingBox().inflate(HORIZONTAL_SCAN_RADIUS, VERTICAL_SCAN_RADIUS, HORIZONTAL_SCAN_RADIUS);
-        for (Entity entity : mc.level.getEntities(
-                mc.player,
-                searchBox,
-                candidate -> candidate != mc.player
-                        && !candidate.isRemoved()
-                        && isUsefulHighlightEntity(candidate)
-        )) {
-            HighlightEntityType entityType = HighlightEntityType.from(entity);
-            if (entityType == null) {
-                continue;
-            }
+        try (ModProfiler.Scope ignored = profile("collectNearbyEntities")) {
+            AABB searchBox = mc.player.getBoundingBox().inflate(HORIZONTAL_SCAN_RADIUS, VERTICAL_SCAN_RADIUS, HORIZONTAL_SCAN_RADIUS);
+            List<Entity> candidates = mc.level.getEntities(
+                    mc.player,
+                    searchBox,
+                    candidate -> candidate != mc.player
+                            && !candidate.isRemoved()
+                            && isUsefulHighlightEntity(candidate)
+            );
+            count("collectNearbyEntities/candidates", candidates.size());
+            int highlightedEntities = 0;
+            try (ModProfiler.Scope classifyScope = profile("collectNearbyEntities/classify")) {
+                for (Entity entity : candidates) {
+                    HighlightEntityType entityType = HighlightEntityType.from(entity);
+                    if (entityType == null) {
+                        continue;
+                    }
 
-            ENTITY_BOXES.add(new ColoredBox(entityType.createBox(entity), entityType.red, entityType.green, entityType.blue));
+                    highlightedEntities++;
+                    ENTITY_BOXES.add(new ColoredBox(entityType.createBox(entity), entityType.red, entityType.green, entityType.blue));
+                }
+            }
+            count("collectNearbyEntities/highlighted", highlightedEntities);
         }
     }
 
@@ -372,9 +506,11 @@ public final class UsefulWorldHighlightRenderHook {
         BLOCK_CHUNK_CACHE.clear();
         DIRTY_CHUNK_MARK_TIMES.clear();
         DIRTY_CHUNK_KEYS.clear();
+        DIRTY_BLOCK_POSITIONS.clear();
         PENDING_BLOCK_SCAN_KEYS.clear();
         lastEntityScanTick = Long.MIN_VALUE;
         lastBlockRefreshTick = Long.MIN_VALUE;
+        averageChunkScanNanos = 10_000_000L;
         lastMinChunkX = Integer.MIN_VALUE;
         lastMaxChunkX = Integer.MIN_VALUE;
         lastMinChunkZ = Integer.MIN_VALUE;
@@ -390,7 +526,7 @@ public final class UsefulWorldHighlightRenderHook {
     private record ColoredBox(AABB box, float red, float green, float blue) {
     }
 
-    private record ChunkScanResult(List<ColoredBox> boxes) {
+    private record ChunkScanResult(Map<Long, ColoredBox> boxesByBlockPos) {
     }
 
     private enum HighlightEntityType {
@@ -605,6 +741,12 @@ public final class UsefulWorldHighlightRenderHook {
             };
         }
 
+        private static boolean canMatch(BlockState blockState) {
+            return blockState.getBlock() instanceof PlayerHeadBlock
+                    || blockState.getBlock() instanceof PlayerWallHeadBlock
+                    || blockState.getBlock() instanceof NoteBlock;
+        }
+
         private AABB createBox(BlockPos blockPos, BlockState blockState) {
             if (blockState.getBlock() instanceof PlayerHeadBlock || blockState.getBlock() instanceof PlayerWallHeadBlock) {
                 return new AABB(
@@ -708,5 +850,124 @@ public final class UsefulWorldHighlightRenderHook {
     private static String readItemModel(ItemStack stack) {
         Object itemModel = stack.get(DataComponents.ITEM_MODEL);
         return itemModel == null ? "" : itemModel.toString();
+    }
+
+    private static ChunkScanResult rescanDirtyPositions(Minecraft mc, LevelChunk chunk, Set<Long> dirtyPositions) {
+        try (ModProfiler.Scope ignored = profile("rescanDirtyPositions")) {
+            ChunkScanResult current = BLOCK_CHUNK_CACHE.get(chunk.getPos().toLong());
+            Map<Long, ColoredBox> boxesByBlockPos = current == null
+                    ? new HashMap<>()
+                    : new HashMap<>(current.boxesByBlockPos);
+            if (dirtyPositions.isEmpty()) {
+                count("rescanDirtyPositions/skippedEmpty");
+                return new ChunkScanResult(boxesByBlockPos);
+            }
+
+            BlockPos playerPos = mc.player.blockPosition();
+            int worldMinY = mc.level.dimensionType().minY();
+            int worldMaxY = worldMinY + mc.level.dimensionType().height() - 1;
+            int minY = Math.max(worldMinY, playerPos.getY() - VERTICAL_SCAN_RADIUS);
+            int maxY = Math.min(worldMaxY, playerPos.getY() + VERTICAL_SCAN_RADIUS);
+            int minX = playerPos.getX() - HORIZONTAL_SCAN_RADIUS;
+            int maxX = playerPos.getX() + HORIZONTAL_SCAN_RADIUS;
+            int minZ = playerPos.getZ() - HORIZONTAL_SCAN_RADIUS;
+            int maxZ = playerPos.getZ() + HORIZONTAL_SCAN_RADIUS;
+
+            Set<Long> affectedPositions = expandDirtyPositions(chunk, dirtyPositions, minX, maxX, minY, maxY, minZ, maxZ);
+            count("rescanDirtyPositions/dirtyPositions", dirtyPositions.size());
+            count("rescanDirtyPositions/affectedPositions", affectedPositions.size());
+            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+            int updatedBoxes = 0;
+            int removedBoxes = 0;
+            try (ModProfiler.Scope iterateScope = profile("rescanDirtyPositions/iterate")) {
+                for (long blockPosLong : affectedPositions) {
+                    cursor.set(BlockPos.of(blockPosLong));
+                    BlockState blockState = chunk.getBlockState(cursor);
+                    if (!HighlightBlockType.canMatch(blockState)) {
+                        if (boxesByBlockPos.remove(blockPosLong) != null) {
+                            removedBoxes++;
+                        }
+                        continue;
+                    }
+
+                    HighlightBlockType blockType = HighlightBlockType.from(blockState, chunk.getBlockEntity(cursor));
+                    if (blockType == null) {
+                        if (boxesByBlockPos.remove(blockPosLong) != null) {
+                            removedBoxes++;
+                        }
+                        continue;
+                    }
+
+                    boxesByBlockPos.put(blockPosLong, new ColoredBox(blockType.createBox(cursor, blockState), blockType.red, blockType.green, blockType.blue));
+                    updatedBoxes++;
+                }
+            }
+            count("rescanDirtyPositions/updatedBoxes", updatedBoxes);
+            count("rescanDirtyPositions/removedBoxes", removedBoxes);
+            count("rescanDirtyPositions/outputBoxes", boxesByBlockPos.size());
+            return new ChunkScanResult(boxesByBlockPos);
+        }
+    }
+
+    private static Set<Long> expandDirtyPositions(LevelChunk chunk, Set<Long> dirtyPositions, int minX, int maxX, int minY, int maxY, int minZ, int maxZ) {
+        Set<Long> affected = new HashSet<>();
+        int chunkMinX = chunk.getPos().getMinBlockX();
+        int chunkMaxX = chunk.getPos().getMaxBlockX();
+        int chunkMinZ = chunk.getPos().getMinBlockZ();
+        int chunkMaxZ = chunk.getPos().getMaxBlockZ();
+        for (long dirtyPosLong : dirtyPositions) {
+            BlockPos dirtyPos = BlockPos.of(dirtyPosLong);
+            for (int dx = -DIRTY_LOCAL_RESCAN_RADIUS; dx <= DIRTY_LOCAL_RESCAN_RADIUS; dx++) {
+                for (int dy = -DIRTY_LOCAL_RESCAN_RADIUS; dy <= DIRTY_LOCAL_RESCAN_RADIUS; dy++) {
+                    for (int dz = -DIRTY_LOCAL_RESCAN_RADIUS; dz <= DIRTY_LOCAL_RESCAN_RADIUS; dz++) {
+                        int x = dirtyPos.getX() + dx;
+                        int y = dirtyPos.getY() + dy;
+                        int z = dirtyPos.getZ() + dz;
+                        if (x < chunkMinX || x > chunkMaxX || z < chunkMinZ || z > chunkMaxZ) {
+                            continue;
+                        }
+                        if (x < minX || x > maxX || y < minY || y > maxY || z < minZ || z > maxZ) {
+                            continue;
+                        }
+                        affected.add(BlockPos.asLong(x, y, z));
+                    }
+                }
+            }
+        }
+        return affected;
+    }
+
+    private static boolean shouldDoFullDirtyRescan(Set<Long> dirtyPositions) {
+        return dirtyPositions.isEmpty() || dirtyPositions.size() >= DIRTY_FULL_RESCAN_THRESHOLD;
+    }
+
+    private static int chunkScanBudgetPerFrame() {
+        long safeAverageNanos = Math.max(1_000_000L, averageChunkScanNanos);
+        int dynamicBudget = (int) Math.max(MIN_CHUNK_SCAN_BUDGET_PER_FRAME, TARGET_CHUNK_SCAN_BUDGET_NANOS / safeAverageNanos);
+        return Mth.clamp(dynamicBudget, MIN_CHUNK_SCAN_BUDGET_PER_FRAME, MAX_CHUNK_SCAN_BUDGET_PER_FRAME);
+    }
+
+    private static void recordChunkScanSample(long elapsedNanos) {
+        long sample = Math.max(0L, elapsedNanos);
+        if (sample <= 0L) {
+            return;
+        }
+
+        averageChunkScanNanos = averageChunkScanNanos <= 0L
+                ? sample
+                : ((averageChunkScanNanos * 7L) + sample) / 8L;
+        count("scanChunk/averageNanos", averageChunkScanNanos);
+    }
+
+    private static ModProfiler.Scope profile(String section) {
+        return ModProfiler.getInstance().scope(PROFILER_PREFIX + "/" + section);
+    }
+
+    private static void count(String counter) {
+        ModProfiler.getInstance().incrementCounter(PROFILER_PREFIX + "/" + counter);
+    }
+
+    private static void count(String counter, long delta) {
+        ModProfiler.getInstance().incrementCounter(PROFILER_PREFIX + "/" + counter, delta);
     }
 }

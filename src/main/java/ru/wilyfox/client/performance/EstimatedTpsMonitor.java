@@ -4,6 +4,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.Packet;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 import java.util.Arrays;
 
@@ -71,17 +72,19 @@ public final class EstimatedTpsMonitor {
     }
 
     private static void onClientTick(Minecraft client) {
-        if (!isMonitoringEnabled()) {
-            reset();
-            return;
-        }
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/EstimatedTpsMonitor")) {
+            if (!isMonitoringEnabled()) {
+                reset();
+                return;
+            }
 
-        if (client.player == null || client.level == null || client.getConnection() == null) {
-            clearSamples();
-            return;
-        }
+            if (client.player == null || client.level == null || client.getConnection() == null) {
+                clearSamples();
+                return;
+            }
 
-        recomputeSnapshot();
+            recomputeSnapshot();
+        }
     }
 
     private static boolean isMonitoringEnabled() {

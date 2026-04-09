@@ -25,10 +25,12 @@ import ru.wilyfox.client.hud.widget.AbstractWidget;
 import ru.wilyfox.client.hud.widget.BossHudWidget;
 import ru.wilyfox.client.hud.widget.Widget;
 import ru.wilyfox.client.hud.widget.WidgetTheme;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.utils.MouseUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +58,8 @@ public class HudRenderer {
     private boolean settingsOpen = false;
     private int lastScreenWidth = -1;
     private int lastScreenHeight = -1;
+    private final Map<Widget, Integer> passiveLayoutWidthCache = new IdentityHashMap<>();
+    private final Map<Widget, Integer> passiveLayoutHeightCache = new IdentityHashMap<>();
 
     private Widget draggedWidget = null;
     private int dragOffsetX = 0;
@@ -269,53 +273,96 @@ public class HudRenderer {
     }
 
     public void render(GuiGraphics context, DeltaTracker tickCounter) {
-        int screenWidth = Minecraft.getInstance().getWindow().getGuiScaledWidth();
-        int screenHeight = Minecraft.getInstance().getWindow().getGuiScaledHeight();
-        double mouseX = MouseUtils.getMouseX();
-        double mouseY = MouseUtils.getMouseY();
-        Widget hoveredWidget = editing ? findTopHoveredWidget(mouseX, mouseY) : null;
-
-        handleScreenResize(screenWidth, screenHeight);
-        updateAnchoredWidgets(screenWidth, screenHeight);
-        updateSnappedWidgets();
-
-        for (Widget widget : widgets) {
-            if (!shouldRenderWidget(widget, editing)) {
-                continue;
-            }
-
-            widget.render(context, tickCounter);
-        }
-
-        if (editing) {
-            if (hoveredWidget != null) {
-                renderHoveredWidgetOutline(context, hoveredWidget);
-                renderHoveredWidgetMinimizeControl(context, hoveredWidget, mouseX, mouseY);
-
-                if (Screen.hasAltDown()) {
-                    renderGroupTooltip(context, hoveredWidget);
-                } else if (Screen.hasControlDown()) {
-                    renderScaleTooltip(context, hoveredWidget);
+        try (ModProfiler.Scope renderScope = ModProfiler.getInstance().scope("hud/render")) {
+            int screenWidth = Minecraft.getInstance().getWindow().getGuiScaledWidth();
+            int screenHeight = Minecraft.getInstance().getWindow().getGuiScaledHeight();
+            double mouseX = MouseUtils.getMouseX();
+            double mouseY = MouseUtils.getMouseY();
+            Widget hoveredWidget = null;
+            if (editing) {
+                try (ModProfiler.Scope hoveredScope = ModProfiler.getInstance().scope("hud/findTopHoveredWidget")) {
+                    hoveredWidget = findTopHoveredWidget(mouseX, mouseY);
                 }
             }
 
-            renderScreenAnchors(context, screenWidth, screenHeight);
-            renderWidgetSnapIndicators(context);
-        }
+            try (ModProfiler.Scope layoutScope = ModProfiler.getInstance().scope("hud/layout")) {
+                boolean resized = handleScreenResize(screenWidth, screenHeight);
+                boolean needsPassiveLayoutRefresh = editing || resized || hasPassiveLayoutChanges();
+                ModProfiler.getInstance().incrementCounter("hud/layout/resized", resized ? 1 : 0);
+                ModProfiler.getInstance().incrementCounter("hud/layout/passiveRefresh", needsPassiveLayoutRefresh ? 1 : 0);
+                if (needsPassiveLayoutRefresh) {
+                    updateAnchoredWidgets(screenWidth, screenHeight);
+                    updateSnappedWidgets();
+                    refreshPassiveLayoutCache();
+                } else {
+                    ModProfiler.getInstance().incrementCounter("hud/layout/skippedPassiveRefresh");
+                }
+            }
 
-        if (settingsOpen) {
-            settingsPanel.render(context, MouseUtils.getMouseX(), MouseUtils.getMouseY());
-        }
+            int renderedWidgets = 0;
+            int skippedWidgets = 0;
+            try (ModProfiler.Scope widgetLoopScope = ModProfiler.getInstance().scope("hud/widgetLoop")) {
+                for (Widget widget : widgets) {
+                    if (!shouldRenderWidget(widget, editing)) {
+                        skippedWidgets++;
+                        continue;
+                    }
 
-        if (ConfigManager.get().fishing.showFishingMarkers) {
-            FishingSpotOverlayRenderer.render(context);
-        }
+                    renderedWidgets++;
+                    try (ModProfiler.Scope widgetScope = ModProfiler.getInstance().scope("widget/" + widget.getClass().getSimpleName())) {
+                        widget.render(context, tickCounter);
+                    }
+                }
+            }
+            ModProfiler.getInstance().incrementCounter("hud/widgetLoop/renderedWidgets", renderedWidgets);
+            ModProfiler.getInstance().incrementCounter("hud/widgetLoop/skippedWidgets", skippedWidgets);
 
-        if (ConfigManager.get().render.showAlchemyIngredientMarkers) {
-            AlchemyIngredientOverlayRenderer.render(context);
-        }
+            if (editing) {
+                try (ModProfiler.Scope editorScope = ModProfiler.getInstance().scope("hud/editorOverlay")) {
+                    if (hoveredWidget != null) {
+                        try (ModProfiler.Scope hoveredOverlayScope = ModProfiler.getInstance().scope("hud/editorOverlay/hoveredWidget")) {
+                            renderHoveredWidgetOutline(context, hoveredWidget);
+                            renderHoveredWidgetMinimizeControl(context, hoveredWidget, mouseX, mouseY);
 
-        PingMarkerOverlayRenderer.render(context, tickCounter.getGameTimeDeltaPartialTick(true));
+                            if (Screen.hasAltDown()) {
+                                renderGroupTooltip(context, hoveredWidget);
+                            } else if (Screen.hasControlDown()) {
+                                renderScaleTooltip(context, hoveredWidget);
+                            }
+                        }
+                    }
+
+                    try (ModProfiler.Scope screenAnchorsScope = ModProfiler.getInstance().scope("hud/editorOverlay/screenAnchors")) {
+                        renderScreenAnchors(context, screenWidth, screenHeight);
+                    }
+                    try (ModProfiler.Scope snapIndicatorsScope = ModProfiler.getInstance().scope("hud/editorOverlay/snapIndicators")) {
+                        renderWidgetSnapIndicators(context);
+                    }
+                }
+            }
+
+            if (settingsOpen) {
+                try (ModProfiler.Scope settingsScope = ModProfiler.getInstance().scope("hud/settingsPanel")) {
+                    settingsPanel.render(context, MouseUtils.getMouseX(), MouseUtils.getMouseY());
+                }
+            }
+
+            if (ConfigManager.get().fishing.showFishingMarkers) {
+                try (ModProfiler.Scope fishingOverlayScope = ModProfiler.getInstance().scope("hud/FishingSpotOverlayRenderer")) {
+                    FishingSpotOverlayRenderer.render(context);
+                }
+            }
+
+            if (ConfigManager.get().render.showAlchemyIngredientMarkers) {
+                try (ModProfiler.Scope alchemyOverlayScope = ModProfiler.getInstance().scope("hud/AlchemyIngredientOverlayRenderer")) {
+                    AlchemyIngredientOverlayRenderer.render(context);
+                }
+            }
+
+            try (ModProfiler.Scope pingOverlayScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer")) {
+                PingMarkerOverlayRenderer.render(context, tickCounter.getGameTimeDeltaPartialTick(true));
+            }
+        }
     }
 
     public void renderLayer(HudLayer layer, GuiGraphics context, DeltaTracker tickCounter) {
@@ -503,8 +550,11 @@ public class HudRenderer {
         return Math.max(min, Math.min(max, value));
     }
 
-    private void handleScreenResize(int screenWidth, int screenHeight) {
+    private boolean handleScreenResize(int screenWidth, int screenHeight) {
+        int beforeWidth = lastScreenWidth;
+        int beforeHeight = lastScreenHeight;
         snapLayoutEngine.handleScreenResize(snapLayoutHost, screenWidth, screenHeight);
+        return beforeWidth != lastScreenWidth || beforeHeight != lastScreenHeight;
     }
 
     private void updateAnchoredWidgets(int screenWidth, int screenHeight) {
@@ -677,6 +727,51 @@ public class HudRenderer {
 
     private void renderWidgetSnapIndicators(GuiGraphics context) {
         HudEditorOverlayRenderer.renderWidgetSnapIndicators(overlayHost, context);
+    }
+
+    private boolean hasPassiveLayoutChanges() {
+        boolean trackedAny = false;
+        for (Widget widget : widgets) {
+            if (!requiresPassiveLayoutTracking(widget)) {
+                continue;
+            }
+
+            trackedAny = true;
+            Integer cachedWidth = passiveLayoutWidthCache.get(widget);
+            Integer cachedHeight = passiveLayoutHeightCache.get(widget);
+            if (cachedWidth == null || cachedHeight == null || cachedWidth != widget.getWidth() || cachedHeight != widget.getHeight()) {
+                return true;
+            }
+        }
+
+        return !trackedAny && (passiveLayoutWidthCache.isEmpty() && passiveLayoutHeightCache.isEmpty()) ? false : prunePassiveLayoutCache();
+    }
+
+    private void refreshPassiveLayoutCache() {
+        passiveLayoutWidthCache.clear();
+        passiveLayoutHeightCache.clear();
+        for (Widget widget : widgets) {
+            if (!requiresPassiveLayoutTracking(widget)) {
+                continue;
+            }
+
+            passiveLayoutWidthCache.put(widget, widget.getWidth());
+            passiveLayoutHeightCache.put(widget, widget.getHeight());
+        }
+    }
+
+    private boolean prunePassiveLayoutCache() {
+        boolean removed = passiveLayoutWidthCache.keySet().removeIf(widget -> !requiresPassiveLayoutTracking(widget));
+        passiveLayoutHeightCache.keySet().removeIf(widget -> !requiresPassiveLayoutTracking(widget));
+        return removed;
+    }
+
+    private boolean requiresPassiveLayoutTracking(Widget widget) {
+        if (!(widget instanceof AbstractWidget abstractWidget)) {
+            return false;
+        }
+
+        return abstractWidget.getScreenAnchor() != null || abstractWidget.hasWidgetSnap();
     }
 
     private boolean shouldRenderWidget(Widget widget, boolean editingMode) {

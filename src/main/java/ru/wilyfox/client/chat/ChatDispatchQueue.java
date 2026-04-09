@@ -3,6 +3,7 @@ package ru.wilyfox.client.chat;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.network.chat.Component;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.utils.Formatting;
 
 import java.util.ArrayDeque;
@@ -40,29 +41,31 @@ public final class ChatDispatchQueue {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.player == null || client.player.connection == null || QUEUE.isEmpty()) {
-                return;
-            }
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/ChatDispatchQueue")) {
+                if (client.player == null || client.player.connection == null || QUEUE.isEmpty()) {
+                    return;
+                }
 
-            long now = System.currentTimeMillis();
-            if (now < blockedUntilMs) {
-                return;
-            }
+                long now = System.currentTimeMillis();
+                if (now < blockedUntilMs) {
+                    return;
+                }
 
-            QueuedMessage next = QUEUE.peek();
-            if (next == null || now - lastSentAt < next.delayMs()) {
-                return;
-            }
+                QueuedMessage next = QUEUE.peek();
+                if (next == null || now - lastSentAt < next.delayMs()) {
+                    return;
+                }
 
-            QUEUE.poll();
-            lastAttemptedMessage = next;
-            lastAttemptedAt = now;
-            if (next.type() == MessageType.CHAT) {
-                client.player.connection.sendChat(next.content());
-            } else {
-                client.player.connection.sendCommand(next.content());
+                QUEUE.poll();
+                lastAttemptedMessage = next;
+                lastAttemptedAt = now;
+                if (next.type() == MessageType.CHAT) {
+                    client.player.connection.sendChat(next.content());
+                } else {
+                    client.player.connection.sendCommand(next.content());
+                }
+                lastSentAt = now;
             }
-            lastSentAt = now;
         });
     }
 

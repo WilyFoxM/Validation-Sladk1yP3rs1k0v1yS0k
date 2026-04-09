@@ -6,6 +6,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.utils.WorldToScreen;
 
 public final class PingMarkerOverlayRenderer {
@@ -21,8 +22,10 @@ public final class PingMarkerOverlayRenderer {
     }
 
     public static void render(GuiGraphics context, float partialTick) {
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer/frame")) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.gameRenderer == null) {
+            ModProfiler.getInstance().incrementCounter("hud/PingMarkerOverlayRenderer/skippedNoWorld");
             return;
         }
 
@@ -31,61 +34,105 @@ public final class PingMarkerOverlayRenderer {
         Vec3 cameraPos = camera.getPosition();
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
+        int markers = 0;
+        int projected = 0;
+        int renderedOnscreen = 0;
+        int renderedOffscreen = 0;
+        int skippedNoPosition = 0;
+        int skippedNoProjection = 0;
+        int skippedAlpha = 0;
+        int skippedOverlayDisabled = 0;
+        try (ModProfiler.Scope iterateScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer/iterateMarkers")) {
+            for (PingMarker marker : PingMarkerManager.getActiveMarkers()) {
+                markers++;
+                Vec3 markerPosition;
+                try (ModProfiler.Scope resolveScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer/resolvePosition")) {
+                    markerPosition = PingMarkerManager.getRenderPosition(marker, partialTick);
+                }
+                if (markerPosition == null) {
+                    skippedNoPosition++;
+                    continue;
+                }
 
-        for (PingMarker marker : PingMarkerManager.getActiveMarkers()) {
-            Vec3 markerPosition = PingMarkerManager.getRenderPosition(marker, partialTick);
-            if (markerPosition == null) {
-                continue;
+                Vec3 renderPos = markerPosition.add(0.0D, Y_OFFSET, 0.0D);
+                WorldToScreen.Projection projection;
+                try (ModProfiler.Scope projectionScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer/project")) {
+                    projection = WorldToScreen.projectDetailed(renderPos);
+                }
+                if (projection == null) {
+                    skippedNoProjection++;
+                    continue;
+                }
+                projected++;
+
+                double distance = cameraPos.distanceTo(markerPosition);
+                float alpha = getDistanceAlpha(distance);
+                if (alpha <= 0.01f) {
+                    skippedAlpha++;
+                    continue;
+                }
+
+                if (!projection.onScreen()) {
+                    try (ModProfiler.Scope offscreenScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer/offscreenIndicator")) {
+                        renderOffscreenIndicator(context, mc, marker, distance, alpha, projection, screenWidth, screenHeight);
+                    }
+                    renderedOffscreen++;
+                    continue;
+                }
+
+                if (!overlayLabelsEnabled || PingMarkerRenderer.isEnabled()) {
+                    skippedOverlayDisabled++;
+                    continue;
+                }
+
+                WorldToScreen.ScreenPoint point = new WorldToScreen.ScreenPoint(
+                        Math.round(projection.screenX()),
+                        Math.round(projection.screenY())
+                );
+
+                String line1;
+                String line2;
+                try (ModProfiler.Scope textScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer/buildText")) {
+                    line1 = PingMarkerPresentation.buildPrimaryLine(marker.payload());
+                    line2 = PingMarkerPresentation.buildSecondaryLine(distance);
+                }
+                boolean hasSecondaryLine = !line2.isBlank();
+
+                int line1Width;
+                int line2Width;
+                try (ModProfiler.Scope measureScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer/measureText")) {
+                    line1Width = mc.font.width(line1);
+                    line2Width = hasSecondaryLine ? mc.font.width(line2) : 0;
+                }
+                int width = Math.max(line1Width, line2Width);
+
+                int x = point.x() - width / 2;
+                int y = point.y() - (hasSecondaryLine ? 18 : 13);
+                int height = hasSecondaryLine ? 18 : 9;
+                int backgroundColor = applyAlpha(PingMarkerPresentation.getBackgroundColor(marker.payload()), alpha);
+                int primaryColor = applyAlpha(PingMarkerPresentation.getPrimaryTextColor(), alpha);
+                int accentColor = applyAlpha(PingMarkerPresentation.getAccentColor(marker.payload()), alpha);
+
+                try (ModProfiler.Scope drawScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer/drawOnscreen")) {
+                    context.fill(x - 3, y - 2, x + width + 3, y + height, backgroundColor);
+                    context.fill(x - 3, y - 2, x + width + 3, y, accentColor);
+                    context.drawString(mc.font, line1, x, y, primaryColor);
+                    if (hasSecondaryLine) {
+                        int secondaryColor = applyAlpha(PingMarkerPresentation.getSecondaryTextColor(), alpha);
+                        context.drawString(mc.font, line2, point.x() - line2Width / 2, y + 9, secondaryColor);
+                    }
+                }
+                renderedOnscreen++;
             }
-
-            Vec3 renderPos = markerPosition.add(0.0D, Y_OFFSET, 0.0D);
-            WorldToScreen.Projection projection = WorldToScreen.projectDetailed(renderPos);
-            if (projection == null) {
-                continue;
-            }
-
-            double distance = cameraPos.distanceTo(markerPosition);
-            float alpha = getDistanceAlpha(distance);
-            if (alpha <= 0.01f) {
-                continue;
-            }
-
-            if (!projection.onScreen()) {
-                renderOffscreenIndicator(context, mc, marker, distance, alpha, projection, screenWidth, screenHeight);
-                continue;
-            }
-
-            if (!overlayLabelsEnabled || PingMarkerRenderer.isEnabled()) {
-                continue;
-            }
-
-            WorldToScreen.ScreenPoint point = new WorldToScreen.ScreenPoint(
-                    Math.round(projection.screenX()),
-                    Math.round(projection.screenY())
-            );
-
-            String line1 = PingMarkerPresentation.buildPrimaryLine(marker.payload());
-            String line2 = PingMarkerPresentation.buildSecondaryLine(distance);
-            boolean hasSecondaryLine = !line2.isBlank();
-
-            int line1Width = mc.font.width(line1);
-            int line2Width = hasSecondaryLine ? mc.font.width(line2) : 0;
-            int width = Math.max(line1Width, line2Width);
-
-            int x = point.x() - width / 2;
-            int y = point.y() - (hasSecondaryLine ? 18 : 13);
-            int height = hasSecondaryLine ? 18 : 9;
-            int backgroundColor = applyAlpha(PingMarkerPresentation.getBackgroundColor(marker.payload()), alpha);
-            int primaryColor = applyAlpha(PingMarkerPresentation.getPrimaryTextColor(), alpha);
-            int accentColor = applyAlpha(PingMarkerPresentation.getAccentColor(marker.payload()), alpha);
-
-            context.fill(x - 3, y - 2, x + width + 3, y + height, backgroundColor);
-            context.fill(x - 3, y - 2, x + width + 3, y, accentColor);
-            context.drawString(mc.font, line1, x, y, primaryColor);
-            if (hasSecondaryLine) {
-                int secondaryColor = applyAlpha(PingMarkerPresentation.getSecondaryTextColor(), alpha);
-                context.drawString(mc.font, line2, point.x() - line2Width / 2, y + 9, secondaryColor);
-            }
+        }
+        ModProfiler.getInstance().incrementCounter("hud/PingMarkerOverlayRenderer/markers", markers);
+        ModProfiler.getInstance().incrementCounter("hud/PingMarkerOverlayRenderer/projected", projected);
+        ModProfiler.getInstance().incrementCounter("hud/PingMarkerOverlayRenderer/renderedOnscreen", renderedOnscreen);
+        ModProfiler.getInstance().incrementCounter("hud/PingMarkerOverlayRenderer/renderedOffscreen", renderedOffscreen);
+        ModProfiler.getInstance().incrementCounter("hud/PingMarkerOverlayRenderer/skippedNoPosition", skippedNoPosition);
+        ModProfiler.getInstance().incrementCounter("hud/PingMarkerOverlayRenderer/skippedNoProjection", skippedNoProjection);
+        ModProfiler.getInstance().incrementCounter("hud/PingMarkerOverlayRenderer/skippedAlpha", skippedAlpha);
+        ModProfiler.getInstance().incrementCounter("hud/PingMarkerOverlayRenderer/skippedOverlayDisabled", skippedOverlayDisabled);
         }
     }
 

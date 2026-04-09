@@ -4,6 +4,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import ru.wilyfox.client.hud.config.AutoMessageEntryConfig;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,11 +31,13 @@ public final class AutoMessageScheduler {
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset());
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.player == null || client.player.connection == null) {
-                return;
-            }
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/AutoMessageScheduler")) {
+                if (client.player == null || client.player.connection == null) {
+                    return;
+                }
 
-            tick();
+                tick();
+            }
         });
     }
 

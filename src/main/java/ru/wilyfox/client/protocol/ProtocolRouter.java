@@ -5,9 +5,11 @@ import net.minecraft.network.FriendlyByteBuf;
 
 import static ru.wilyfox.FrogHelper.LOGGER;
 import static ru.wilyfox.client.debug.DebugLogger.info;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 final class ProtocolRouter {
     void route(ProtocolState state, byte[] data) {
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("protocol/route")) {
         ProtocolEnvelope envelope = tryReadEnvelope(data);
         int length = data.length;
 
@@ -60,11 +62,15 @@ final class ProtocolRouter {
                 ProtocolDebugLogger.logUnknownPayloadBody("unknown typeId=" + typeId, typeId, body);
             }
         }
+        }
     }
 
     private void dispatch(String subchannel, byte[] data, PayloadHandler handler, ProtocolState state) {
         try {
-            boolean success = handler.handle();
+            boolean success;
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("protocol/handle/" + subchannel)) {
+                success = handler.handle();
+            }
             ProtocolGraphTelemetry.getInstance().onRouteHandled(subchannel, success, data.length);
             if (!success) {
                 state.diagnostics.onDecodeFailure(subchannel, data.length, null);

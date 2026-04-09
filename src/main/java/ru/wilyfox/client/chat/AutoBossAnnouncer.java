@@ -11,6 +11,7 @@ import ru.wilyfox.boss.BossRepository;
 import ru.wilyfox.bridge.BossHealthOverlayAccessor;
 import ru.wilyfox.client.hud.config.BossRespawnMessagesConfig;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.client.protocol.DiamondWorldProtocolClient;
 import ru.wilyfox.utils.BossName;
 import ru.wilyfox.utils.BossLevel;
@@ -58,12 +59,14 @@ public final class AutoBossAnnouncer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearState());
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (repository == null || client.player == null || client.player.connection == null) {
-                return;
-            }
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/AutoBossAnnouncer")) {
+                if (repository == null || client.player == null || client.player.connection == null) {
+                    return;
+                }
 
-            checkRespawnMessages();
-            checkLowHealthMessages();
+                checkRespawnMessages();
+                checkLowHealthMessages();
+            }
         });
     }
 

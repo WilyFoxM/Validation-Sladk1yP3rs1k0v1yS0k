@@ -11,6 +11,7 @@ import ru.wilyfox.client.hud.config.ConfigManager;
 import ru.wilyfox.client.miner.ActiveMinerInfo;
 import ru.wilyfox.client.miner.ActiveMinersStore;
 import ru.wilyfox.client.potion.PotionStore;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.client.rune.RuneSetCooldownStore;
 import ru.wilyfox.client.seller.SellerCooldownStore;
 import ru.wilyfox.client.wand.WandCooldownTracker;
@@ -84,23 +85,25 @@ public final class PopUpEventNotifier {
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset());
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.player == null || client.getConnection() == null) {
-                return;
-            }
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/PopUpEventNotifier")) {
+                if (client.player == null || client.getConnection() == null) {
+                    return;
+                }
 
-            if (!primed) {
-                prime();
-                return;
-            }
+                if (!primed) {
+                    prime();
+                    return;
+                }
 
-            checkBossSpawns();
-            checkAbilityReady();
-            checkWandReady();
-            checkSellerReady();
-            checkMinerReturned();
-            checkRuneSetReady();
-            checkPotionExpired();
-            checkBoosterExpired();
+                checkBossSpawns();
+                checkAbilityReady();
+                checkWandReady();
+                checkSellerReady();
+                checkMinerReturned();
+                checkRuneSetReady();
+                checkPotionExpired();
+                checkBoosterExpired();
+            }
         });
     }
 

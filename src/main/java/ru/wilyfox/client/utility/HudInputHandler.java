@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import ru.wilyfox.client.hud.HudEditingScreen;
 import ru.wilyfox.client.hud.HudRenderer;
 import ru.wilyfox.client.keybinds.KeyBinds;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 public final class HudInputHandler {
     private final HudRenderer hudRenderer;
@@ -15,12 +16,14 @@ public final class HudInputHandler {
 
     public void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (KeyBinds.EDITING_MODE.consumeClick()) {
-                toggleEditor(client);
-            }
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/HudInputHandler")) {
+                while (KeyBinds.EDITING_MODE.consumeClick()) {
+                    toggleEditor(client);
+                }
 
-            while (KeyBinds.SETTINGS_MENU.consumeClick()) {
-                toggleSettings(client);
+                while (KeyBinds.SETTINGS_MENU.consumeClick()) {
+                    toggleSettings(client);
+                }
             }
         });
     }

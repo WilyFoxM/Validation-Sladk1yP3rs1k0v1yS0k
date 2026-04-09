@@ -5,6 +5,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import ru.wilyfox.client.hud.config.ConfigManager;
 import ru.wilyfox.client.keybinds.KeyBinds;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 import static ru.wilyfox.FrogHelper.LOGGER;
 import static ru.wilyfox.client.debug.DebugLogger.info;
@@ -17,27 +18,29 @@ public final class Clicker {
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (KeyBinds.AUTO_ATTACK.consumeClick()) {
-                autoAttackEnabled = !autoAttackEnabled;
-                info(LOGGER, "Auto {}: {}", getActionName(), autoAttackEnabled);
-            }
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/Clicker")) {
+                while (KeyBinds.AUTO_ATTACK.consumeClick()) {
+                    autoAttackEnabled = !autoAttackEnabled;
+                    info(LOGGER, "Auto {}: {}", getActionName(), autoAttackEnabled);
+                }
 
-            if (!autoAttackEnabled) {
-                return;
-            }
+                if (!autoAttackEnabled) {
+                    return;
+                }
 
-            if (client.player == null) {
-                return;
-            }
+                if (client.player == null) {
+                    return;
+                }
 
-            long now = System.currentTimeMillis();
+                long now = System.currentTimeMillis();
 
-            int cps = ConfigManager.get().clicker.cps;
-            long interval = Math.max(1L, 1000L / Math.max(1, cps));
+                int cps = ConfigManager.get().clicker.cps;
+                long interval = Math.max(1L, 1000L / Math.max(1, cps));
 
-            if (now - lastAttackTime >= interval) {
-                lastAttackTime = now;
-                click();
+                if (now - lastAttackTime >= interval) {
+                    lastAttackTime = now;
+                    click();
+                }
             }
         });
     }

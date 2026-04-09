@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
+import ru.wilyfox.client.profiler.ModProfiler;
 import ru.wilyfox.client.rune.RuneSetCooldownStore;
 import ru.wilyfox.client.wand.WandCooldownTracker;
 
@@ -45,17 +46,19 @@ final class ProtocolTransport {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset(state));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (!isDiamondWorldConnection(client)) {
-                return;
-            }
+            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/ProtocolTransport")) {
+                if (!isDiamondWorldConnection(client)) {
+                    return;
+                }
 
-            long now = System.currentTimeMillis();
-            if (!shouldSendHandshake(state, now)) {
-                return;
-            }
+                long now = System.currentTimeMillis();
+                if (!shouldSendHandshake(state, now)) {
+                    return;
+                }
 
-            sendHandshake();
-            state.lastHandshakeAt = now;
+                sendHandshake();
+                state.lastHandshakeAt = now;
+            }
         });
     }
 

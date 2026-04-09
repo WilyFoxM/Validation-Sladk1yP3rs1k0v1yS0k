@@ -14,6 +14,7 @@ import ru.wilyfox.client.chat.BossShareService;
 import ru.wilyfox.client.chat.ChatMessageCopyExtractor;
 import ru.wilyfox.client.chat.ChatTabOverlay;
 import ru.wilyfox.client.hud.config.ConfigManager;
+import ru.wilyfox.client.profiler.ProfilerDebugCommand;
 import ru.wilyfox.client.protocol.ProtocolDebugCommand;
 import ru.wilyfox.client.target.TargetListCommand;
 
@@ -56,7 +57,8 @@ public abstract class ChatScreenMixin extends Screen {
     private void froghelper$handleBossShareCommand(String input, boolean addToHistory, CallbackInfo ci) {
         if (BossShareService.handleOutgoingCommand(input, addToHistory)
                 || TargetListCommand.handleOutgoingCommand(input, addToHistory)
-                || ProtocolDebugCommand.handleOutgoingCommand(input, addToHistory)) {
+                || ProtocolDebugCommand.handleOutgoingCommand(input, addToHistory)
+                || ProfilerDebugCommand.handleOutgoingCommand(input, addToHistory)) {
             ci.cancel();
         }
     }

@@ -4,6 +4,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 public final class PlayerHealthBarRenderHook {
     private PlayerHealthBarRenderHook() {
@@ -14,23 +15,29 @@ public final class PlayerHealthBarRenderHook {
     }
 
     private static void onAfterEntities(WorldRenderContext context) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) {
-            return;
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("render/PlayerHealthBarRenderHook")) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level == null || mc.player == null) {
+                ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderHook/skippedNoWorld");
+                return;
+            }
+
+            if (context.matrixStack() == null) {
+                ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderHook/skippedNoMatrix");
+                return;
+            }
+
+            MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
+            try (ModProfiler.Scope renderScope = ModProfiler.getInstance().scope("render/PlayerHealthBarRenderHook/renderBars")) {
+                PlayerHealthBarRenderer.render(
+                        context.matrixStack(),
+                        bufferSource,
+                        context.tickCounter().getGameTimeDeltaPartialTick(true)
+                );
+            }
+            try (ModProfiler.Scope batchScope = ModProfiler.getInstance().scope("render/PlayerHealthBarRenderHook/endBatch")) {
+                bufferSource.endBatch();
+            }
         }
-
-        if (context.matrixStack() == null) {
-            return;
-        }
-
-        MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
-
-        PlayerHealthBarRenderer.render(
-                context.matrixStack(),
-                bufferSource,
-                context.tickCounter().getGameTimeDeltaPartialTick(true)
-        );
-
-        bufferSource.endBatch();
     }
 }

@@ -16,6 +16,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import ru.wilyfox.client.hud.config.ConfigManager;
 import ru.wilyfox.client.hud.widget.WidgetTheme;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 public final class PlayerHealthBarRenderer {
     private static final float WORLD_SCALE = 0.025f;
@@ -34,64 +35,98 @@ public final class PlayerHealthBarRenderer {
     }
 
     public static void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, float partialTick) {
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("render/PlayerHealthBarRenderer/frame")) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null || mc.gameRenderer == null) {
+            ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/skippedNoWorld");
             return;
         }
 
         if (!ConfigManager.get().playerHealthBars.active) {
+            ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/skippedDisabled");
             return;
         }
 
         EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
         Camera camera = dispatcher.camera;
         if (camera == null) {
+            ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/skippedNoCamera");
             return;
         }
 
         Vec3 cameraPos = camera.getPosition();
+        int candidates = 0;
+        int rendered = 0;
+        int skippedSelf = 0;
+        int skippedDead = 0;
+        int skippedInvisible = 0;
+        int skippedOccluded = 0;
+        int skippedDistance = 0;
+        try (ModProfiler.Scope iterateScope = ModProfiler.getInstance().scope("render/PlayerHealthBarRenderer/iteratePlayers")) {
+            for (Player target : mc.level.players()) {
+                candidates++;
+                if (target == mc.player) {
+                    skippedSelf++;
+                    continue;
+                }
 
-        for (Player target : mc.level.players()) {
-            if (target == mc.player) {
-                continue;
+                if (!target.isAlive() || target.isRemoved()) {
+                    skippedDead++;
+                    continue;
+                }
+
+                if (target.isInvisible()) {
+                    skippedInvisible++;
+                    continue;
+                }
+
+                boolean visibleToCamera;
+                try (ModProfiler.Scope visibilityScope = ModProfiler.getInstance().scope("render/PlayerHealthBarRenderer/visibilityCheck")) {
+                    visibleToCamera = isVisibleToCamera(target);
+                }
+                if (!visibleToCamera) {
+                    skippedOccluded++;
+                    continue;
+                }
+
+                double x = Mth.lerp(partialTick, target.xOld, target.getX());
+                double y = Mth.lerp(partialTick, target.yOld, target.getY()) + target.getBbHeight() + BAR_Y_OFFSET;
+                double z = Mth.lerp(partialTick, target.zOld, target.getZ());
+
+                double distance = cameraPos.distanceTo(new Vec3(x, y, z));
+                float distanceAlpha = ConfigManager.get().playerHealthBars.distanceFade
+                        ? getDistanceAlpha(distance)
+                        : 1.0f;
+                if (distanceAlpha <= 0.01f) {
+                    skippedDistance++;
+                    continue;
+                }
+
+                poseStack.pushPose();
+                poseStack.translate(x - cameraPos.x, y - cameraPos.y, z - cameraPos.z);
+                poseStack.mulPose(dispatcher.cameraOrientation());
+                poseStack.scale(-WORLD_SCALE, -WORLD_SCALE, WORLD_SCALE);
+
+                try (ModProfiler.Scope renderBarScope = ModProfiler.getInstance().scope("render/PlayerHealthBarRenderer/renderBar")) {
+                    renderHealthBar(poseStack, bufferSource, target, distanceAlpha);
+                }
+
+                poseStack.popPose();
+                rendered++;
             }
-
-            if (!target.isAlive() || target.isRemoved()) {
-                continue;
-            }
-
-            if (target.isInvisible()) {
-                continue;
-            }
-
-            if (!isVisibleToCamera(target)) {
-                continue;
-            }
-
-            double x = Mth.lerp(partialTick, target.xOld, target.getX());
-            double y = Mth.lerp(partialTick, target.yOld, target.getY()) + target.getBbHeight() + BAR_Y_OFFSET;
-            double z = Mth.lerp(partialTick, target.zOld, target.getZ());
-
-            double distance = cameraPos.distanceTo(new Vec3(x, y, z));
-            float distanceAlpha = ConfigManager.get().playerHealthBars.distanceFade
-                    ? getDistanceAlpha(distance)
-                    : 1.0f;
-            if (distanceAlpha <= 0.01f) {
-                continue;
-            }
-
-            poseStack.pushPose();
-            poseStack.translate(x - cameraPos.x, y - cameraPos.y, z - cameraPos.z);
-            poseStack.mulPose(dispatcher.cameraOrientation());
-            poseStack.scale(-WORLD_SCALE, -WORLD_SCALE, WORLD_SCALE);
-
-            renderHealthBar(poseStack, bufferSource, target, distanceAlpha);
-
-            poseStack.popPose();
+        }
+        ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/candidates", candidates);
+        ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/rendered", rendered);
+        ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/skippedSelf", skippedSelf);
+        ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/skippedDead", skippedDead);
+        ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/skippedInvisible", skippedInvisible);
+        ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/skippedOccluded", skippedOccluded);
+        ModProfiler.getInstance().incrementCounter("render/PlayerHealthBarRenderer/skippedDistance", skippedDistance);
         }
     }
 
     private static void renderHealthBar(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Player target, float distanceAlpha) {
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("render/PlayerHealthBarRenderer/renderHealthBar")) {
         float health = target.getHealth();
         float maxHealth = target.getMaxHealth();
         float progress = maxHealth <= 0.0f ? 0.0f : Mth.clamp(health / maxHealth, 0.0f, 1.0f);
@@ -122,6 +157,7 @@ public final class PlayerHealthBarRenderer {
 
         if (fillWidth > 0) {
             fillQuad(vertexConsumer, matrix, fillStartX, y1, x2, y2, FILL_Z, fillColor);
+        }
         }
     }
 

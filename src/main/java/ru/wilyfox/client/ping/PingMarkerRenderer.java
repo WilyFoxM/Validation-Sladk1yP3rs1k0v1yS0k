@@ -14,6 +14,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import ru.wilyfox.client.hud.widget.WidgetTheme;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 public final class PingMarkerRenderer {
     private static final boolean WORLD_RENDER_ENABLED = true;
@@ -40,53 +41,85 @@ public final class PingMarkerRenderer {
     }
 
     public static void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, float partialTick) {
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("render/PingMarkerRenderer/frame")) {
         if (!WORLD_RENDER_ENABLED) {
+            ModProfiler.getInstance().incrementCounter("render/PingMarkerRenderer/skippedDisabled");
             return;
         }
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) {
+            ModProfiler.getInstance().incrementCounter("render/PingMarkerRenderer/skippedNoWorld");
             return;
         }
 
         EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
         Camera camera = dispatcher.camera;
         if (camera == null) {
+            ModProfiler.getInstance().incrementCounter("render/PingMarkerRenderer/skippedNoCamera");
             return;
         }
 
         Vec3 cameraPos = camera.getPosition();
+        int markers = 0;
+        int rendered = 0;
+        int skippedNoPosition = 0;
+        int skippedByAlpha = 0;
+        try (ModProfiler.Scope iterateScope = ModProfiler.getInstance().scope("render/PingMarkerRenderer/iterateMarkers")) {
+            for (PingMarker marker : PingMarkerManager.getActiveMarkers()) {
+                markers++;
+                Vec3 position;
+                try (ModProfiler.Scope resolveScope = ModProfiler.getInstance().scope("render/PingMarkerRenderer/resolvePosition")) {
+                    position = PingMarkerManager.getRenderPosition(marker, partialTick);
+                }
+                if (position == null) {
+                    skippedNoPosition++;
+                    continue;
+                }
+                double distance = cameraPos.distanceTo(position);
+                float alpha = getDistanceAlpha(distance);
+                if (alpha <= 0.01f) {
+                    skippedByAlpha++;
+                    continue;
+                }
 
-        for (PingMarker marker : PingMarkerManager.getActiveMarkers()) {
-            Vec3 position = PingMarkerManager.getRenderPosition(marker, partialTick);
-            if (position == null) {
-                continue;
+                poseStack.pushPose();
+                poseStack.translate(position.x - cameraPos.x, position.y - cameraPos.y + Y_OFFSET, position.z - cameraPos.z);
+                poseStack.mulPose(dispatcher.cameraOrientation());
+                poseStack.scale(WORLD_SCALE, -WORLD_SCALE, WORLD_SCALE);
+
+                try (ModProfiler.Scope contentScope = ModProfiler.getInstance().scope("render/PingMarkerRenderer/renderMarkerContents")) {
+                    renderMarkerContents(poseStack, bufferSource, marker, distance, alpha);
+                }
+
+                poseStack.popPose();
+                rendered++;
             }
-            double distance = cameraPos.distanceTo(position);
-            float alpha = getDistanceAlpha(distance);
-            if (alpha <= 0.01f) {
-                continue;
-            }
-
-            poseStack.pushPose();
-            poseStack.translate(position.x - cameraPos.x, position.y - cameraPos.y + Y_OFFSET, position.z - cameraPos.z);
-            poseStack.mulPose(dispatcher.cameraOrientation());
-            poseStack.scale(WORLD_SCALE, -WORLD_SCALE, WORLD_SCALE);
-
-            renderMarkerContents(poseStack, bufferSource, marker, distance, alpha);
-
-            poseStack.popPose();
+        }
+        ModProfiler.getInstance().incrementCounter("render/PingMarkerRenderer/markers", markers);
+        ModProfiler.getInstance().incrementCounter("render/PingMarkerRenderer/rendered", rendered);
+        ModProfiler.getInstance().incrementCounter("render/PingMarkerRenderer/skippedNoPosition", skippedNoPosition);
+        ModProfiler.getInstance().incrementCounter("render/PingMarkerRenderer/skippedByAlpha", skippedByAlpha);
         }
     }
 
     private static void renderMarkerContents(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, PingMarker marker, double distance, float alpha) {
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("render/PingMarkerRenderer/renderMarkerContents/body")) {
         Minecraft mc = Minecraft.getInstance();
         Font font = mc.font;
-        String primaryText = PingMarkerPresentation.buildPrimaryLine(marker.payload());
-        String secondaryText = PingMarkerPresentation.buildSecondaryLine(distance);
+        String primaryText;
+        String secondaryText;
+        try (ModProfiler.Scope textScope = ModProfiler.getInstance().scope("render/PingMarkerRenderer/buildText")) {
+            primaryText = PingMarkerPresentation.buildPrimaryLine(marker.payload());
+            secondaryText = PingMarkerPresentation.buildSecondaryLine(distance);
+        }
         boolean hasSecondaryLine = !secondaryText.isBlank();
-        int primaryWidth = font.width(primaryText);
-        int secondaryWidth = hasSecondaryLine ? font.width(secondaryText) : 0;
+        int primaryWidth;
+        int secondaryWidth;
+        try (ModProfiler.Scope widthScope = ModProfiler.getInstance().scope("render/PingMarkerRenderer/measureText")) {
+            primaryWidth = font.width(primaryText);
+            secondaryWidth = hasSecondaryLine ? font.width(secondaryText) : 0;
+        }
         int panelWidth = Math.max(primaryWidth, secondaryWidth) + PANEL_PADDING_X * 2;
         int panelHeight = hasSecondaryLine ? PANEL_HEIGHT : SINGLE_LINE_PANEL_HEIGHT;
         int x1 = -panelWidth / 2;
@@ -100,8 +133,10 @@ public final class PingMarkerRenderer {
         int backgroundColor = applyAlpha(PingMarkerPresentation.getBackgroundColor(marker.payload()), alpha);
         int accentColor = applyAlpha(PingMarkerPresentation.getAccentColor(marker.payload()), alpha);
 
-        fillQuad(vertexConsumer, matrix, x1, y1, x2, y2, PANEL_Z, backgroundColor);
-        fillQuad(vertexConsumer, matrix, x1, y1, x2, y1 + ACCENT_HEIGHT, ACCENT_Z, accentColor);
+        try (ModProfiler.Scope panelScope = ModProfiler.getInstance().scope("render/PingMarkerRenderer/drawPanel")) {
+            fillQuad(vertexConsumer, matrix, x1, y1, x2, y2, PANEL_Z, backgroundColor);
+            fillQuad(vertexConsumer, matrix, x1, y1, x2, y1 + ACCENT_HEIGHT, ACCENT_Z, accentColor);
+        }
 
         int primaryTextColor = applyAlpha(PingMarkerPresentation.getPrimaryTextColor(), alpha);
         float primaryTextX = -primaryWidth / 2.0f;
@@ -112,41 +147,12 @@ public final class PingMarkerRenderer {
         Component primaryComponent = Component.literal(primaryText);
         int textBackground = (int) (Minecraft.getInstance().options.getBackgroundOpacity(0.25f) * 255.0f) << 24;
 
-        font.drawInBatch(
-                primaryComponent,
-                primaryTextX,
-                primaryTextY,
-                primaryTextColor,
-                false,
-                textMatrix,
-                bufferSource,
-                Font.DisplayMode.SEE_THROUGH,
-                textBackground,
-                LIGHT_COLOR
-        );
-        font.drawInBatch(
-                primaryComponent,
-                primaryTextX,
-                primaryTextY,
-                WidgetTheme.TOOLTIP_TEXT,
-                false,
-                textMatrix,
-                bufferSource,
-                Font.DisplayMode.NORMAL,
-                0,
-                LightTexture.lightCoordsWithEmission(LIGHT_COLOR, 2)
-        );
-        if (hasSecondaryLine) {
-            int secondaryTextColor = applyAlpha(PingMarkerPresentation.getSecondaryTextColor(), alpha);
-            float secondaryTextX = -secondaryWidth / 2.0f;
-            float secondaryTextY = primaryTextY + font.lineHeight - 1.0f;
-            Component secondaryComponent = Component.literal(secondaryText);
-
+        try (ModProfiler.Scope textRenderScope = ModProfiler.getInstance().scope("render/PingMarkerRenderer/drawText")) {
             font.drawInBatch(
-                    secondaryComponent,
-                    secondaryTextX,
-                    secondaryTextY,
-                    secondaryTextColor,
+                    primaryComponent,
+                    primaryTextX,
+                    primaryTextY,
+                    primaryTextColor,
                     false,
                     textMatrix,
                     bufferSource,
@@ -155,10 +161,10 @@ public final class PingMarkerRenderer {
                     LIGHT_COLOR
             );
             font.drawInBatch(
-                    secondaryComponent,
-                    secondaryTextX,
-                    secondaryTextY,
-                    WidgetTheme.TEXT_SOFT,
+                    primaryComponent,
+                    primaryTextX,
+                    primaryTextY,
+                    WidgetTheme.TOOLTIP_TEXT,
                     false,
                     textMatrix,
                     bufferSource,
@@ -166,8 +172,40 @@ public final class PingMarkerRenderer {
                     0,
                     LightTexture.lightCoordsWithEmission(LIGHT_COLOR, 2)
             );
+            if (hasSecondaryLine) {
+                int secondaryTextColor = applyAlpha(PingMarkerPresentation.getSecondaryTextColor(), alpha);
+                float secondaryTextX = -secondaryWidth / 2.0f;
+                float secondaryTextY = primaryTextY + font.lineHeight - 1.0f;
+                Component secondaryComponent = Component.literal(secondaryText);
+
+                font.drawInBatch(
+                        secondaryComponent,
+                        secondaryTextX,
+                        secondaryTextY,
+                        secondaryTextColor,
+                        false,
+                        textMatrix,
+                        bufferSource,
+                        Font.DisplayMode.SEE_THROUGH,
+                        textBackground,
+                        LIGHT_COLOR
+                );
+                font.drawInBatch(
+                        secondaryComponent,
+                        secondaryTextX,
+                        secondaryTextY,
+                        WidgetTheme.TEXT_SOFT,
+                        false,
+                        textMatrix,
+                        bufferSource,
+                        Font.DisplayMode.NORMAL,
+                        0,
+                        LightTexture.lightCoordsWithEmission(LIGHT_COLOR, 2)
+                );
+            }
         }
         poseStack.popPose();
+        }
     }
 
     private static void fillQuad(VertexConsumer vertexConsumer, Matrix4f matrix, int x1, int y1, int x2, int y2, float z, int argb) {

@@ -16,6 +16,7 @@ import net.minecraft.world.item.component.CustomModelData;
 import org.lwjgl.glfw.GLFW;
 import ru.wilyfox.client.hud.config.ConfigManager;
 import ru.wilyfox.client.hud.widget.WidgetTheme;
+import ru.wilyfox.client.profiler.ModProfiler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -116,24 +117,26 @@ public class QuickAccessScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        hoveredItem = null;
-        dragMouseX = mouseX;
-        dragMouseY = mouseY;
-        recalculatePanels();
-        itemLayouts.clear();
-        sectionLayouts.clear();
+        try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("ui/QuickAccessScreen/render")) {
+            hoveredItem = null;
+            dragMouseX = mouseX;
+            dragMouseY = mouseY;
+            recalculatePanels();
+            itemLayouts.clear();
+            sectionLayouts.clear();
 
-        graphics.fill(0, 0, this.width, this.height, isEditorMode() ? 0x00000000 : backdropColor());
-        renderSelectorPanel(graphics, mouseX, mouseY);
+            graphics.fill(0, 0, this.width, this.height, isEditorMode() ? 0x00000000 : backdropColor());
+            renderSelectorPanel(graphics, mouseX, mouseY);
 
-        if (isEditorMode()) {
-            renderEditorPanel(graphics);
-            renderEditorFooter(graphics);
-            super.render(graphics, mouseX, mouseY, partialTick);
-        }
+            if (isEditorMode()) {
+                renderEditorPanel(graphics);
+                renderEditorFooter(graphics);
+                super.render(graphics, mouseX, mouseY, partialTick);
+            }
 
-        if (dragging) {
-            renderDraggedPreview(graphics);
+            if (dragging) {
+                renderDraggedPreview(graphics);
+            }
         }
     }
 
