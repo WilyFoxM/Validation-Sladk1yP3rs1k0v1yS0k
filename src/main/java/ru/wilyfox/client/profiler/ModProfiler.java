@@ -32,10 +32,13 @@ public final class ModProfiler {
     private static final DateTimeFormatter REPORT_TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z").withZone(ZoneId.systemDefault());
     private static final int CALL_TREE_CHILD_LIMIT = 12;
     private static final int CALL_TREE_DEPTH_LIMIT = 6;
+    private static final int SAMPLE_HISTORY_LIMIT = 256;
+    private static final int SAMPLE_REPORT_LIMIT = 25;
 
     private final Map<String, SectionStats> statsBySection = new LinkedHashMap<>();
     private final Map<String, CounterStats> countersByName = new LinkedHashMap<>();
     private final Map<String, CallTreeNodeStats> rootNodes = new LinkedHashMap<>();
+    private final Deque<ScopeSample> recentSamples = new ArrayDeque<>();
     private final ThreadLocal<Deque<ActiveScope>> activeScopes = ThreadLocal.withInitial(ArrayDeque::new);
     private boolean enabled;
     private long sessionStartedAt;
@@ -63,6 +66,7 @@ public final class ModProfiler {
         statsBySection.clear();
         countersByName.clear();
         rootNodes.clear();
+        recentSamples.clear();
         sessionStartedAt = enabled ? System.currentTimeMillis() : 0L;
         sessionStoppedAt = 0L;
     }
@@ -194,6 +198,17 @@ public final class ModProfiler {
             callTreeRoots.add(toCallTreeView(entry.getKey(), entry.getValue()));
         }
 
+        List<ScopeSampleView> samples = recentSamples.stream()
+                .map(sample -> new ScopeSampleView(
+                        sample.section,
+                        sample.startedAtMs,
+                        sample.endedAtMs,
+                        sample.totalNanos,
+                        sample.selfNanos,
+                        sample.threadName
+                ))
+                .toList();
+
         return new ReportSnapshot(
                 enabled,
                 sessionStartedAt,
@@ -204,6 +219,7 @@ public final class ModProfiler {
                 sections,
                 counters,
                 callTreeRoots,
+                samples,
                 SessionContext.capture(),
                 null
         );
@@ -255,6 +271,20 @@ public final class ModProfiler {
         node.totalNanos += elapsedNanos;
         node.selfNanos += selfNanos;
         node.maxNanos = Math.max(node.maxNanos, elapsedNanos);
+
+        if (shouldCaptureSample(section, parentScope)) {
+            recentSamples.addLast(new ScopeSample(
+                    section,
+                    elapsedNanos,
+                    selfNanos,
+                    System.currentTimeMillis() - nanosToMillisRounded(elapsedNanos),
+                    System.currentTimeMillis(),
+                    Thread.currentThread().getName()
+            ));
+            while (recentSamples.size() > SAMPLE_HISTORY_LIMIT) {
+                recentSamples.removeFirst();
+            }
+        }
     }
 
     private long sessionDurationMs() {
@@ -315,6 +345,14 @@ public final class ModProfiler {
         appendSectionTable(markdown, "Top Sections By Self Time", sectionsBySelf.stream().limit(30).toList());
         appendSectionTable(markdown, "Largest Max Spikes", sectionsBySpike.stream().limit(20).toList());
         appendCallTree(markdown, "Call Tree By Total Time", snapshot.callTreeRoots());
+        appendSampleTable(markdown, "Recent Samples", snapshot.samples().stream()
+                .sorted(Comparator.comparingLong(ScopeSampleView::endedAtMs).reversed())
+                .limit(SAMPLE_REPORT_LIMIT)
+                .toList());
+        appendSampleTable(markdown, "Worst Samples", snapshot.samples().stream()
+                .sorted(Comparator.comparingLong(ScopeSampleView::totalNanos).reversed())
+                .limit(SAMPLE_REPORT_LIMIT)
+                .toList());
 
         List<CounterView> countersByTotal = snapshot.counters().stream()
                 .sorted(Comparator.comparingLong(CounterView::total).reversed())
@@ -330,6 +368,7 @@ public final class ModProfiler {
         markdown.append("- <code>max</code>: worst single-call spike.\n");
         markdown.append("- <code>share</code>: section share of total measured profiler time.\n");
         markdown.append("- call tree: nested profiled scopes rendered as a text tree in Markdown.\n");
+        markdown.append("- samples: bounded history of recent frame/tick-like profiled scopes.\n");
         markdown.append("- <code>events</code>: number of times a counter was incremented.\n");
         markdown.append("- <code>total</code> in counter tables: accumulated work units, not time.\n");
         markdown.append("</details>\n");
@@ -427,6 +466,25 @@ public final class ModProfiler {
         markdown.append("\n");
     }
 
+    private void appendSampleTable(StringBuilder markdown, String title, List<ScopeSampleView> samples) {
+        markdown.append("## ").append(title).append("\n\n");
+        if (samples.isEmpty()) {
+            markdown.append("> No matching samples.\n\n");
+            return;
+        }
+
+        markdown.append("| Section | Ended | Total ms | Self ms | Thread |\n");
+        markdown.append("| --- | --- | ---: | ---: | --- |\n");
+        for (ScopeSampleView sample : samples) {
+            markdown.append("| <code>").append(escapePipe(sample.section())).append("</code> | <code>")
+                    .append(REPORT_TIMESTAMP_FORMAT.format(Instant.ofEpochMilli(sample.endedAtMs()))).append("</code> | ")
+                    .append(formatMillis(sample.totalNanos())).append(" | ")
+                    .append(formatMillis(sample.selfNanos())).append(" | <code>")
+                    .append(escapePipe(sample.threadName())).append("</code> |\n");
+        }
+        markdown.append("\n");
+    }
+
     private void appendSessionContext(StringBuilder markdown, SessionContext context) {
         markdown.append("## Session Context\n\n");
         markdown.append("| Field | Value |\n");
@@ -481,6 +539,9 @@ public final class ModProfiler {
                 .filter(counter -> counter.name().startsWith(normalizedPrefix))
                 .toList();
         List<CallTreeNodeView> callTreeRoots = filterCallTree(snapshot.callTreeRoots(), normalizedPrefix);
+        List<ScopeSampleView> samples = snapshot.samples().stream()
+                .filter(sample -> sample.section().startsWith(normalizedPrefix))
+                .toList();
         long measuredNanos = sections.stream().mapToLong(SectionView::totalNanos).sum();
         return new ReportSnapshot(
                 snapshot.enabled(),
@@ -492,6 +553,7 @@ public final class ModProfiler {
                 sections,
                 counters,
                 callTreeRoots,
+                samples,
                 snapshot.context(),
                 normalizedPrefix
         );
@@ -546,6 +608,32 @@ public final class ModProfiler {
         return value == null || value.isBlank() ? "n/a" : value;
     }
 
+    private boolean shouldCaptureSample(String section, ActiveScope parentScope) {
+        if (section == null || section.isBlank()) {
+            return false;
+        }
+        if (section.endsWith("/frame")) {
+            return true;
+        }
+        if (section.startsWith("tick/") || section.startsWith("world/")) {
+            return true;
+        }
+        if (section.startsWith("ui/") && section.endsWith("/render")) {
+            return true;
+        }
+        if (parentScope == null) {
+            return section.startsWith("render/")
+                    || section.startsWith("hud/")
+                    || section.startsWith("ui/")
+                    || section.startsWith("protocol/");
+        }
+        return false;
+    }
+
+    private long nanosToMillisRounded(long nanos) {
+        return Math.round(nanos / 1_000_000.0);
+    }
+
     private String resolveModVersion(String modId) {
         Optional<String> version = FabricLoader.getInstance().getModContainer(modId)
                 .map(container -> container.getMetadata().getVersion().getFriendlyString());
@@ -573,6 +661,16 @@ public final class ModProfiler {
     }
 
     public record CallTreeNodeView(String name, long calls, long totalNanos, long selfNanos, long maxNanos, List<CallTreeNodeView> children) {
+    }
+
+    public record ScopeSampleView(
+            String section,
+            long startedAtMs,
+            long endedAtMs,
+            long totalNanos,
+            long selfNanos,
+            String threadName
+    ) {
     }
 
     public record SessionContext(
@@ -629,6 +727,7 @@ public final class ModProfiler {
             List<SectionView> sections,
             List<CounterView> counters,
             List<CallTreeNodeView> callTreeRoots,
+            List<ScopeSampleView> samples,
             SessionContext context,
             String focusPrefix
     ) {
@@ -665,6 +764,24 @@ public final class ModProfiler {
             this.section = section;
             this.startedAtNanos = startedAtNanos;
             this.parent = parent;
+        }
+    }
+
+    private static final class ScopeSample {
+        private final String section;
+        private final long totalNanos;
+        private final long selfNanos;
+        private final long startedAtMs;
+        private final long endedAtMs;
+        private final String threadName;
+
+        private ScopeSample(String section, long totalNanos, long selfNanos, long startedAtMs, long endedAtMs, String threadName) {
+            this.section = section;
+            this.totalNanos = totalNanos;
+            this.selfNanos = selfNanos;
+            this.startedAtMs = startedAtMs;
+            this.endedAtMs = endedAtMs;
+            this.threadName = threadName;
         }
     }
 }
