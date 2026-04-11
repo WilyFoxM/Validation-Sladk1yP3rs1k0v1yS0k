@@ -359,9 +359,9 @@ public class HudRenderer {
                 }
             }
 
-            try (ModProfiler.Scope pingOverlayScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer")) {
-                PingMarkerOverlayRenderer.render(context, tickCounter.getGameTimeDeltaPartialTick(true));
-            }
+            // try (ModProfiler.Scope pingOverlayScope = ModProfiler.getInstance().scope("hud/PingMarkerOverlayRenderer")) {
+            //     PingMarkerOverlayRenderer.render(context, tickCounter.getGameTimeDeltaPartialTick(true));
+            // }
         }
     }
 

@@ -9,24 +9,24 @@ import ru.wilyfox.client.profiler.ModProfiler;
 
 public final class MousePingInputHandler {
     public void register() {
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/MousePingInputHandler")) {
-                if (client.player == null) {
-                    return;
-                }
-
-                while (KeyBinds.PING_MARKER.consumeClick()) {
-                    if (client.screen != null) {
-                        continue;
-                    }
-
-                    PingPayload payload = PingPayload.captureCurrent();
-                    if (payload != null) {
-                        PingMarkerManager.addLocalMarker(payload);
-                        FrogChatProtocol.sendPingPayload(payload.toJson());
-                    }
-                }
-            }
-        });
+        // ClientTickEvents.END_CLIENT_TICK.register(client -> {
+        //     try (ModProfiler.Scope ignored = ModProfiler.getInstance().scope("tick/MousePingInputHandler")) {
+        //         if (client.player == null) {
+        //             return;
+        //         }
+        //
+        //         while (KeyBinds.PING_MARKER.consumeClick()) {
+        //             if (client.screen != null) {
+        //                 continue;
+        //             }
+        //
+        //             PingPayload payload = PingPayload.captureCurrent();
+        //             if (payload != null) {
+        //                 PingMarkerManager.addLocalMarker(payload);
+        //                 FrogChatProtocol.sendPingPayload(payload.toJson());
+        //             }
+        //         }
+        //     }
+        // });
     }
 }

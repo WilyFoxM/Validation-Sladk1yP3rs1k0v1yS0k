@@ -111,15 +111,15 @@ public class Client {
         new ClientEntityEventHandler(this.bossTracker).register();
         new HudInputHandler(hudRenderer).register();
         new MouseInputHandler(hudRenderer).register();
-        new MousePingInputHandler().register();
+        // new MousePingInputHandler().register();
         new QuickAccessInputHandler().register();
         DungeonMapTracker.getInstance().register();
 
         PlayerHealthBarRenderHook.register();
         DungeonDecorationHighlightRenderHook.register();
         UsefulWorldHighlightRenderHook.register();
-        PingMarkerManager.init();
-        PingMarkerRenderHook.register();
+        // PingMarkerManager.init();
+        // PingMarkerRenderHook.register();
         EstimatedTpsMonitor.register();
         KeyBinds.register();
         RuneSetSwitcher.register();

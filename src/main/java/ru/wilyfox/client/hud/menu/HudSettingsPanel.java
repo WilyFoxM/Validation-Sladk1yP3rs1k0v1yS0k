@@ -526,14 +526,14 @@ public class HudSettingsPanel {
                 )
         );
 
-        componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "OverlayRender",
-                        () -> ConfigManager.get().wayPoints.overlayRender,
-                        value -> ConfigManager.get().wayPoints.overlayRender = value
-                )
-        );
+        // componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
+        //         new ToggleSettingsComponent(
+        //                 0, 0, 0, 0,
+        //                 "OverlayRender",
+        //                 () -> ConfigManager.get().wayPoints.overlayRender,
+        //                 value -> ConfigManager.get().wayPoints.overlayRender = value
+        //         )
+        // );
 
         for (ThemePreset preset : ThemePreset.values()) {
             componentsByCategory.get(SettingsCategory.THEME).add(
@@ -571,61 +571,61 @@ public class HudSettingsPanel {
                 )
         );
 
-        componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
-                new SliderSettingsComponent(
-                        0, 0, 0, 0,
-                        "Ping distance",
-                        () -> ConfigManager.get().wayPoints.maxDistance,
-                        value -> ConfigManager.get().wayPoints.maxDistance = value,
-                        5, 100
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
-                new SliderSettingsComponent(
-                        0, 0, 0, 0,
-                        "Entity offset",
-                        () -> ConfigManager.get().wayPoints.entityOffsetPixels,
-                        value -> ConfigManager.get().wayPoints.entityOffsetPixels = value,
-                        0, 100
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Show author",
-                        () -> ConfigManager.get().wayPoints.showAuthor,
-                        value -> ConfigManager.get().wayPoints.showAuthor = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Show entity name",
-                        () -> ConfigManager.get().wayPoints.showEntityName,
-                        value -> ConfigManager.get().wayPoints.showEntityName = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Show location",
-                        () -> ConfigManager.get().wayPoints.showLocation,
-                        value -> ConfigManager.get().wayPoints.showLocation = value
-                )
-        );
-
-        componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
-                new ToggleSettingsComponent(
-                        0, 0, 0, 0,
-                        "Show distance",
-                        () -> ConfigManager.get().wayPoints.showDistance,
-                        value -> ConfigManager.get().wayPoints.showDistance = value
-                )
-        );
+        // componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
+        //         new SliderSettingsComponent(
+        //                 0, 0, 0, 0,
+        //                 "Ping distance",
+        //                 () -> ConfigManager.get().wayPoints.maxDistance,
+        //                 value -> ConfigManager.get().wayPoints.maxDistance = value,
+        //                 5, 100
+        //         )
+        // );
+        //
+        // componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
+        //         new SliderSettingsComponent(
+        //                 0, 0, 0, 0,
+        //                 "Entity offset",
+        //                 () -> ConfigManager.get().wayPoints.entityOffsetPixels,
+        //                 value -> ConfigManager.get().wayPoints.entityOffsetPixels = value,
+        //                 0, 100
+        //         )
+        // );
+        //
+        // componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
+        //         new ToggleSettingsComponent(
+        //                 0, 0, 0, 0,
+        //                 "Show author",
+        //                 () -> ConfigManager.get().wayPoints.showAuthor,
+        //                 value -> ConfigManager.get().wayPoints.showAuthor = value
+        //         )
+        // );
+        //
+        // componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
+        //         new ToggleSettingsComponent(
+        //                 0, 0, 0, 0,
+        //                 "Show entity name",
+        //                 () -> ConfigManager.get().wayPoints.showEntityName,
+        //                 value -> ConfigManager.get().wayPoints.showEntityName = value
+        //         )
+        // );
+        //
+        // componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
+        //         new ToggleSettingsComponent(
+        //                 0, 0, 0, 0,
+        //                 "Show location",
+        //                 () -> ConfigManager.get().wayPoints.showLocation,
+        //                 value -> ConfigManager.get().wayPoints.showLocation = value
+        //         )
+        // );
+        //
+        // componentsByCategory.get(SettingsCategory.WAYPOINTS).add(
+        //         new ToggleSettingsComponent(
+        //                 0, 0, 0, 0,
+        //                 "Show distance",
+        //                 () -> ConfigManager.get().wayPoints.showDistance,
+        //                 value -> ConfigManager.get().wayPoints.showDistance = value
+        //         )
+        // );
 
         componentsByCategory.get(SettingsCategory.POP_UPS).add(
                 new ToggleSettingsComponent(

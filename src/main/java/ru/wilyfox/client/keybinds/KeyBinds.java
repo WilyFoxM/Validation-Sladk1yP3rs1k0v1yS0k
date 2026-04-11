@@ -48,14 +48,14 @@ public final class KeyBinds {
             )
     );
 
-    public static final KeyMapping PING_MARKER = KeyBindingHelper.registerKeyBinding(
-            new KeyMapping(
-                    "Ping Marker",
-                    InputConstants.Type.MOUSE,
-                    GLFW.GLFW_MOUSE_BUTTON_MIDDLE,
-                    CATEGORY
-            )
-    );
+    // public static final KeyMapping PING_MARKER = KeyBindingHelper.registerKeyBinding(
+    //         new KeyMapping(
+    //                 "Ping Marker",
+    //                 InputConstants.Type.MOUSE,
+    //                 GLFW.GLFW_MOUSE_BUTTON_MIDDLE,
+    //                 CATEGORY
+    //         )
+    // );
 
     public static final KeyMapping CLAN_HIDE = KeyBindingHelper.registerKeyBinding(
             new KeyMapping(

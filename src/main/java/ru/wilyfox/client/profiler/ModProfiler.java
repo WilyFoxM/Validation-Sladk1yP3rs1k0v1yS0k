@@ -410,18 +410,21 @@ public final class ModProfiler {
                 .limit(CALL_TREE_CHILD_LIMIT)
                 .toList();
         for (int i = 0; i < sortedRoots.size(); i++) {
-            appendCallTreeLine(markdown, sortedRoots.get(i), "", i == sortedRoots.size() - 1, 0);
+            CallTreeNodeView root = sortedRoots.get(i);
+            appendCallTreeLine(markdown, root, "", i == sortedRoots.size() - 1, 0, Math.max(1L, root.totalNanos()));
         }
         markdown.append("```\n\n");
     }
 
-    private void appendCallTreeLine(StringBuilder markdown, CallTreeNodeView node, String prefix, boolean lastChild, int depth) {
+    private void appendCallTreeLine(StringBuilder markdown, CallTreeNodeView node, String prefix, boolean lastChild, int depth, long rootTotalNanos) {
+        double shareOfRoot = rootTotalNanos <= 0L ? 0.0 : node.totalNanos() * 100.0 / rootTotalNanos;
         markdown.append(prefix);
         if (depth > 0) {
             markdown.append(lastChild ? "\\- " : "|- ");
         }
         markdown.append(node.name())
                 .append(" [total=").append(formatMillis(node.totalNanos())).append(" ms")
+                .append(", share=").append(String.format(Locale.ROOT, "%.1f%%", shareOfRoot))
                 .append(", self=").append(formatMillis(node.selfNanos())).append(" ms")
                 .append(", calls=").append(node.calls())
                 .append(", max=").append(formatMillis(node.maxNanos())).append(" ms")
@@ -440,7 +443,7 @@ public final class ModProfiler {
                 .limit(CALL_TREE_CHILD_LIMIT)
                 .toList();
         for (int i = 0; i < children.size(); i++) {
-            appendCallTreeLine(markdown, children.get(i), childPrefix, i == children.size() - 1, depth + 1);
+            appendCallTreeLine(markdown, children.get(i), childPrefix, i == children.size() - 1, depth + 1, rootTotalNanos);
         }
         if (node.children().size() > children.size()) {
             markdown.append(childPrefix).append("`- ...\n");
